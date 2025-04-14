@@ -197,10 +197,12 @@ python main.py --all
 ├── evaluate.py              # Evaluation utilities
 ├── utils/                   # Utility functions
 │   └── download.py          # Dataset utils
+│   └── metrics.py           # Evaluation metrics
+│   └── visualization.py     # PIL-based visualization
 ├── models/
-│   ├── classifier/          # ResNet-based classifiers
-│   ├── cam/                 # CAM methods: GradCAM, CCAM
-│   └── segmentation/        # PSPNet (semantic segmentation)
+│   ├── classifier.py        # ResNet-based classifiers
+│   ├── cam.py               # CAM methods: GradCAM, CCAM
+│   └── pspnet.py/           # PSPNet (semantic segmentation)
 ├── data/                    # Dataset handling
 ├── config.json              # Default experiment configuration
 └── requirements.txt         # Dependencies
