@@ -24,10 +24,9 @@ This framework implements a full pipeline for Weakly-Supervised Semantic Segment
 - **Additional dependencies**:  
   Only 3 allowed in this minimal setup:  
   - `torch`  
-  - `torchvision`  
-  - `opencv-python`
-
-(Use optional tools like PIL, tqdm, numpy, matplotlib for more advanced visualization if constraints allow.)
+  - `Pillow`  
+  - `tqdm`
+  - `numpy`
 
 ---
 
