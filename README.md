@@ -21,8 +21,7 @@ This framework implements a full pipeline for Weakly-Supervised Semantic Segment
 - Python 3.6+
 - PyTorch 1.7+
 - CUDA (recommended for faster training)
-- **Additional dependencies**:  
-  Only 3 allowed in this minimal setup:  
+- **Additional dependencies**: 
   - `torch`  
   - `Pillow`  
   - `tqdm`
