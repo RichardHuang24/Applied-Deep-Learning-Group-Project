@@ -159,7 +159,7 @@ def evaluate(config_path, supervision='full', checkpoint_path=None, output_dir=N
         pseudo_masks_dir = Path(config['paths']['masks']) / cam_method
     
     _, val_loader = create_dataloaders(
-        config_path=config_path,
+        config=config,
         supervision=supervision,
         pseudo_masks_dir=pseudo_masks_dir
     )
