@@ -483,7 +483,7 @@ def validate_segmentation_epoch(model, dataloader, criterion, device, config):
     running_pixel_acc = 0.0
     running_miou = 0.0
     total_samples = 0
-    num_classes = config['dataset']['num_classes'] + 1  # Add 1 for background
+    num_classes = 2 # Always 2 classes (Foreground/Background) for segmentation validation
     
     with torch.no_grad():
         for images, masks, _, _ in tqdm(dataloader, desc="Validation"):
