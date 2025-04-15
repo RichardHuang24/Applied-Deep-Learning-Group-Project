@@ -75,7 +75,7 @@ class PSPNet(nn.Module):
     """
     PSPNet implementation with configurable backbone
     """
-    def __init__(self, num_classes=38, backbone='resne50', pretrained=True):
+    def __init__(self, num_classes=2, backbone='resne50', pretrained=True):
         """
         Initialize PSPNet
         
@@ -87,8 +87,8 @@ class PSPNet(nn.Module):
         super(PSPNet, self).__init__()
         
         # Create backbone
-        if backbone == 'resnet50':
-            base_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=pretrained)
+        if backbone == 'resnet18':
+            base_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=pretrained)
             layers = list(base_model.children())
             self.layer0 = nn.Sequential(*layers[:4])  # Initial layers before stride=2
             self.layer1 = layers[4]  # First residual block
@@ -187,10 +187,10 @@ def create_segmentation_model(config_path='config.json', backbone='resnet50'):
     with open(config_path, 'r') as f:
         config = json.load(f)
     
-    num_classes = config['dataset']['num_classes'] + 1  # Add background class
+    # num_classes = config['dataset']['num_classes'] + 1  # Add background class
     
     return PSPNet(
-        num_classes=num_classes,
+        num_classes=2,
         backbone=backbone,
         pretrained=True
     )

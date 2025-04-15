@@ -5,6 +5,7 @@ import os
 import torch
 import json
 import logging
+import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from PIL import Image
@@ -42,16 +43,17 @@ def generate_mask_for_image(cam_model, image, target_class=None, threshold=0.4):
         raise ValueError(f"Unsupported CAM model type: {type(cam_model)}")
     
     # Binarize using threshold
-    mask = (cam > threshold).float()
+    mask = (cam > threshold).astype(np.uint8)
     
     # Add background as class 0
     # Class 1 is object/foreground
     bg_mask = 1.0 - mask
     
     # Combine to create class indices (0=bg, 1=fg)
-    class_mask = mask.clone()
+    # class_mask = mask.clone()
     
-    return class_mask.squeeze()
+    # return class_mask.squeeze()
+    return torch.tensor(mask.squeeze())
 
 def generate_masks(config_path, method='gradcam', classifier_path=None, output_dir=None, 
                   visualize=False, threshold=0.4):
@@ -110,7 +112,7 @@ def generate_masks(config_path, method='gradcam', classifier_path=None, output_d
         if classifier_path:
             # Load trained classifier
             classifier = create_classifier(config_path)
-            classifier.load_state_dict(torch.load(classifier_path, map_location=device)['model_state_dict'])
+            classifier.load_state_dict(torch.load(classifier_path, map_location=device))
             classifier = classifier.to(device)
             cam_model = GradCAM(classifier)
         else:
@@ -122,15 +124,14 @@ def generate_masks(config_path, method='gradcam', classifier_path=None, output_d
         cam_model = create_cam_model(config_path, method=method, backbone=backbone)
         if classifier_path:
             # Load trained classifier weights
-            cam_model.load_state_dict(torch.load(classifier_path, map_location=device)['model_state_dict'])
+            cam_model.load_state_dict(torch.load(classifier_path, map_location=device))
         cam_model = cam_model.to(device)
     else:
         raise ValueError(f"Unsupported CAM method: {method}")
     
     # Create dataloaders
     train_loader, _ = create_dataloaders(
-        config_path=config_path,
-        mode='classifier',
+        config=config,
         batch_size=1  # Process one image at a time
     )
     
@@ -165,13 +166,13 @@ def generate_masks(config_path, method='gradcam', classifier_path=None, output_d
             else:  # CCAM
                 cam = cam_model.get_cam(images, targets)
             
-            # Create visualization
-            vis_img = visualize_cam(
-                images[0].cpu(),
-                cam[0].cpu(),
-                mask,
-                save_path=vis_dir / f"{img_name}_cam.png"
-            )
+            # # Create visualization
+            # vis_img = visualize_cam(
+            #     images[0].cpu(),
+            #     cam[0].cpu(),
+            #     mask.cpu(),
+            #     save_path=vis_dir / f"{img_name}_cam.png"
+            # )
     
     logger.info(f"Generated {method} masks for all images. Saved to {masks_dir}")
     

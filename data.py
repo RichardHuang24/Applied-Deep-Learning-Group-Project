@@ -467,14 +467,32 @@ class SegmentationDataset(Dataset):
         
         # Resize both image and mask to the same size
         if self.transform:
+            # Logging info - img / mask size before transform
+            logger.debug(f"Image size before transform: {img.size}")
+            logger.debug(f"Mask size before transform: {mask.size}")
             img = self.transform(img)
-        
+            
+            # Logging info - img / mask size after transform
+            logger.debug(f"Image size after transform: {img.size}")
+            logger.debug(f"Mask size after transform: {mask.size}")
+
         # Convert mask to tensor and adjust labels if needed
-        mask = transforms.ToTensor()(mask)
+        # to_tensor = transforms.ToTensor()
+        # mask_tensor = to_tensor(mask) * 255  # Scale mask to [0, 255]
+        # mask_tensor = mask_tensor.long()
+        
+        # mask = transforms.ToTensor()(mask) * 255
         
         # Convert single-channel mask to class indices (H, W)
-        mask = mask.squeeze(0).long()
-        
+        # mask = mask.squeeze(0).long()
+
+        mask_transform = transforms.Compose([
+            transforms.Resize((224, 224)),  # Resize to match image size
+            transforms.ToTensor()
+        ])
+
+        mask = mask_transform(mask)
+
         return img, mask, img_path, img_file
     
     def _load_annotations(self, split):

@@ -89,11 +89,12 @@ def train_classifier(config_path, experiment, output_dir=None):
     
     # Extract dataset information
     dataset_config = config.get('dataset', {})
-    num_classes = dataset_config.get('num_classes', 37)  # Default to Pet dataset classes
+    # num_classes = dataset_config.get('num_classes', 37)  # Default to Pet dataset classes
     
     try:
         # Create dataloaders
         train_loader, val_loader = create_dataloaders(
+            supervision='test',
             config=config,
             split='train', 
             batch_size=batch_size
@@ -350,6 +351,9 @@ def train_segmentation(config_path, supervision='full', pseudo_masks_dir=None, n
     with open(config_path, 'r') as f:
         config = json.load(f)
     
+    # Logging info
+    logger.info(f"Training segmentation model with supervision: {supervision}")
+
     model_name = next((exp['name'] for exp in config['experiments']['segmentation'] 
                       if exp['supervision'] == supervision), supervision)
     
@@ -422,9 +426,16 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
     running_pixel_acc = 0.0
     running_miou = 0.0
     total_samples = 0
-    num_classes = config['dataset']['num_classes'] + 1  # Add 1 for background
+    # num_classes = config['dataset']['num_classes'] + 1  # Add 1 for background
+    num_classes = 2
     
     for images, masks, _, _ in tqdm(dataloader, desc="Training"):
+        # Size
+        print(f"Image size: {images.size()}")
+        print(f"Mask size: {masks.size()}")
+        # Logging
+        logger.info(f"Image shape: {images.shape}, Mask shape: {masks.shape}")
+
         images, masks = images.to(device), masks.to(device)
         
         optimizer.zero_grad()
@@ -432,6 +443,11 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
         
         # Handle auxiliary loss if present
         if isinstance(outputs, tuple):
+            # Size
+            print(f"Output size: {outputs[0].size()}")
+            # Logging
+            logger.info(f"Output shape: {outputs[0].shape}, Aux output shape: {outputs[1].shape}")
+
             outputs, aux_outputs = outputs
             loss = criterion(outputs, masks) + 0.4 * criterion(aux_outputs, masks)
         else:
