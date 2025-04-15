@@ -11,7 +11,7 @@ from tqdm import tqdm
 from PIL import Image
 
 from models.classifier import create_classifier
-from models.cam import GradCAM, CCAM, create_cam_model
+from models.cam import GradCAM, create_cam_model
 from data import create_dataloaders
 from utils.visualization import visualize_cam
 
@@ -37,8 +37,6 @@ def generate_mask_for_image(cam_model, image, target_class=None, threshold=0.4):
     # Generate CAM
     if isinstance(cam_model, GradCAM):
         cam = cam_model.generate_cam(image, target_class)
-    elif isinstance(cam_model, CCAM):
-        cam = cam_model.get_cam(image, target_class)
     else:
         raise ValueError(f"Unsupported CAM model type: {type(cam_model)}")
     
@@ -55,14 +53,14 @@ def generate_mask_for_image(cam_model, image, target_class=None, threshold=0.4):
     # return class_mask.squeeze()
     return torch.tensor(mask.squeeze())
 
-def generate_masks(config_path, method='gradcam', classifier_path=None, output_dir=None, 
+def generate_masks(config, method='gradcam', classifier_path=None, output_dir=None,
                   visualize=False, threshold=0.4):
     """
     Generate pseudo masks for all images using CAM
     
     Args:
         config_path: Path to configuration file
-        method: CAM method ('gradcam' or 'ccam')
+        method: CAM method ('gradcam' or 'cam')
         classifier_path: Path to trained classifier checkpoint
         output_dir: Directory to save generated masks
         visualize: Whether to save visualizations
@@ -71,10 +69,6 @@ def generate_masks(config_path, method='gradcam', classifier_path=None, output_d
     Returns:
         Path to generated masks directory
     """
-    # Load configuration
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
     # Setup output directory
     if output_dir is None:
         output_dir = Path(config['paths']['masks']) / method
@@ -103,32 +97,20 @@ def generate_masks(config_path, method='gradcam', classifier_path=None, output_d
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
-    
-    # Create classifier model
-    backbone = config['models']['classifier']['default']['backbone']
-    
+
     # Create CAM model
     if method == 'gradcam':
-        if classifier_path:
-            # Load trained classifier
-            classifier = create_classifier(config_path)
-            classifier.load_state_dict(torch.load(classifier_path, map_location=device))
-            classifier = classifier.to(device)
-            cam_model = GradCAM(classifier)
-        else:
-            logger.warning("No classifier provided for GradCAM. Using random weights.")
-            classifier = create_classifier(config_path)
-            classifier = classifier.to(device)
-            cam_model = GradCAM(classifier)
-    elif method == 'ccam':
-        cam_model = create_cam_model(config_path, method=method, backbone=backbone)
-        if classifier_path:
-            # Load trained classifier weights
-            cam_model.load_state_dict(torch.load(classifier_path, map_location=device))
-        cam_model = cam_model.to(device)
+        classifier = create_classifier(config)
+        classifier.load_state_dict(torch.load(classifier_path, map_location=device))
+        classifier = classifier.to(device)
+        cam_model = GradCAM(classifier)
+
+    elif method == 'cam':
+        raise NotImplementedError("CAM method is not implemented yet.")
     else:
         raise ValueError(f"Unsupported CAM method: {method}")
-    
+
+
     # Create dataloaders
     train_loader, _ = create_dataloaders(
         config=config,

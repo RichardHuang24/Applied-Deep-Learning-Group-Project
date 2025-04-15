@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import json
 import logging
+import torchvision.models as models
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -19,57 +20,53 @@ class ResNetClassifier(nn.Module):
     - Initializations: ImageNet, Random, SimCLR
     """
     def __init__(self, backbone='resnet18', initialization='imagenet', num_classes=37):
-        """
-        Initialize the ResNet classifier
-        
-        Args:
-            backbone (str): ResNet backbone ('resnet18', 'resnet34', 'resnet50')
-            initialization (str): Initialization method ('imagenet', 'random', 'simclr')
-            num_classes (int): Number of output classes
-        """
-        super(ResNetClassifier, self).__init__()
-        
-        self.backbone_name = backbone
-        self.initialization = initialization
-        
-        # Create backbone
-        if backbone == 'resnet18':
-            if initialization == 'imagenet':
-                self.model = torch.hub.load('pytorch/vision', 'resnet18', pretrained=True)
-            else:
-                self.model = torch.hub.load('pytorch/vision', 'resnet18', pretrained=False)
-        elif backbone == 'resnet34':
-            if initialization == 'imagenet':
-                self.model = torch.hub.load('pytorch/vision', 'resnet34', pretrained=True)
-            else:
-                self.model = torch.hub.load('pytorch/vision', 'resnet34', pretrained=False)
-        elif backbone == 'resnet50':
-            if initialization == 'imagenet':
-                self.model = torch.hub.load('pytorch/vision', 'resnet50', pretrained=True)
-            else:
-                self.model = torch.hub.load('pytorch/vision', 'resnet50', pretrained=False)
-        else:
-            raise ValueError(f"Unsupported backbone: {backbone}")
-        
-        # Load SimCLR weights if specified
-        if initialization == 'simclr':
-            self._load_simclr_weights()
-        
-        # Replace final FC layer for the number of classes
+        super().__init__()
+        self.backbone_name = backbone.lower()
+        self.initialization = initialization.lower()
+
+        self.model = self._create_backbone()
+        self._initialize_weights()
+
+        # Replace the final fully connected layer
         in_features = self.model.fc.in_features
         self.model.fc = nn.Linear(in_features, num_classes)
+
+    def _create_backbone(self):
+        backbones = {
+            'resnet18': models.resnet18,
+            'resnet34': models.resnet34,
+            'resnet50': models.resnet50,
+        }
+
+        if self.backbone_name not in backbones:
+            raise ValueError(f"Unsupported backbone: {self.backbone_name}")
+
+        # Always load ImageNet weights first for compatibility
+        if self.initialization == 'imagenet':
+            return backbones[self.backbone_name](weights='DEFAULT')
+        else:
+            # Random init or simclr will be handled later
+            return backbones[self.backbone_name](weights=None)
+
+    def _initialize_weights(self):
+        if self.initialization == 'simclr':
+            self._load_simclr_weights()
+        elif self.initialization == 'random':
+            self.model.apply(self._init_weights)
+        elif self.initialization == 'imagenet':
+            pass  # Already loaded in _create_backbone
+        else:
+            raise ValueError(f"Unsupported initialization: {self.initialization}")
         
     def _load_simclr_weights(self):
-        """Load SimCLR pre-trained weights if available"""
         simclr_path = Path(f"pretrained/simclr_{self.backbone_name}.pth")
         if simclr_path.exists():
             state_dict = torch.load(simclr_path, map_location='cpu')
-            # Remove projection head weights, keep only encoder
-            encoder_state_dict = {k: v for k, v in state_dict.items() 
-                                if not k.startswith('projection_head')}
-            
-            # Load weights
-            missing, unexpected = self.model.load_state_dict(encoder_state_dict, strict=False)
+
+            # Remove projection head weights (if present)
+            encoder_dict = {k: v for k, v in state_dict.items() if not k.startswith('projection_head')}
+
+            missing, unexpected = self.model.load_state_dict(encoder_dict, strict=False)
             logger.info(f"Loaded SimCLR weights for {self.backbone_name}")
             if missing:
                 logger.warning(f"Missing keys: {missing}")
@@ -77,38 +74,37 @@ class ResNetClassifier(nn.Module):
                 logger.warning(f"Unexpected keys: {unexpected}")
         else:
             logger.warning(f"SimCLR weights not found at {simclr_path}. Using random initialization.")
+            self.model.apply(self._init_weights)
+    
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.kaiming_normal_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
     
     def forward(self, x):
-        """Forward pass through the model"""
         return self.model(x)
-    
+
     def get_features(self, x, layer='layer4'):
         """
-        Extract features from intermediate layers
-        
-        Args:
-            x: Input tensor
-            layer: Layer name to extract features from
-        
-        Returns:
-            Feature maps from the specified layer
+        Extract features from a specific intermediate layer.
+        Currently supports 'layer4' only.
         """
-        if layer == 'layer4':
-            x = self.model.conv1(x)
-            x = self.model.bn1(x)
-            x = self.model.relu(x)
-            x = self.model.maxpool(x)
-            
-            x = self.model.layer1(x)
-            x = self.model.layer2(x)
-            x = self.model.layer3(x)
-            features = self.model.layer4(x)
-            return features
-        else:
-            # Other intermediate layers could be implemented here
+        if layer != 'layer4':
             raise ValueError(f"Layer {layer} not supported")
 
-def create_classifier(config_path, experiment=None):
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        features = self.model.layer4(x)
+        return features
+
+def create_classifier(config, experiment=None):
     """
     Factory function to create classifier model
     
@@ -119,20 +115,16 @@ def create_classifier(config_path, experiment=None):
     Returns:
         ResNetClassifier: Configured classifier model
     """
-    # Load configuration
-    with open(config_path, 'r') as f:
-        config = json.load(f)
+
     
     num_classes = config['dataset']['num_classes']
     
     # Get backbone and initialization based on experiment or defaults
-    if experiment and experiment in [exp['name'] for exp in config['experiments']['classifier']]:
-        # Find the specific experiment
-        for exp in config['experiments']['classifier']:
-            if exp['name'] == experiment:
-                backbone = exp['backbone']
-                initialization = exp['initialization']
-                break
+    if experiment:
+        parts = experiment.split('_')
+        backbone = parts[0]
+        initialization = parts[1] if len(parts) > 1 else 'imagenet'
+        print(f"Using experiment settings: Backbone={backbone}, Initialization={initialization}")
     else:
         # Use defaults
         backbone = config['models']['classifier']['default']['backbone']

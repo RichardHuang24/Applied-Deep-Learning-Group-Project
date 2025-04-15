@@ -31,7 +31,7 @@ def setup_logging(output_dir):
         ]
     )
 
-def run_experiment(config_path, backbone, initialization, cam_method, output_base_dir=None):
+def run_experiment(config_path, backbone, initialization, cam_method):
     """
     Run a complete experiment with specified configuration
     
@@ -39,9 +39,8 @@ def run_experiment(config_path, backbone, initialization, cam_method, output_bas
         config_path: Path to configuration file
         backbone: Backbone model name ('resnet18', 'resnet34', 'resnet50')
         initialization: Initialization method ('simclr', 'imagenet', 'random')
-        cam_method: CAM method ('gradcam', 'ccam')
-        output_base_dir: Base directory for outputs
-        
+        cam_method: CAM method ('gradcam', 'cam')
+
     Returns:
         dict: Dictionary with experiment results
     """
@@ -53,12 +52,9 @@ def run_experiment(config_path, backbone, initialization, cam_method, output_bas
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     experiment_name = f"{backbone}_{initialization}_{cam_method}_{timestamp}"
     
-    if output_base_dir is None:
-        output_base_dir = Path(config['paths']['outputs'])
-    else:
-        output_base_dir = Path(output_base_dir)
+    output_base_dir = Path(config['paths']['outputs'])
     
-    output_dir = output_base_dir / "experiments" / experiment_name
+    output_dir = output_base_dir / "experiments" / experiment_name  # output/experiments/exp_name
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Set up logging
@@ -79,30 +75,34 @@ def run_experiment(config_path, backbone, initialization, cam_method, output_bas
     
     # Step 1: Train classifier
     logger.info("Step 1: Training classifier")
-    classifier_name = f"{backbone}_{initialization}"
+    classifier_name = f"{backbone}_{initialization}"    # resnet50_random
+
+    # Final checkpoint path
     classifier_path = train_classifier(
-        config_path=config_path,
+        config=config,
         experiment=classifier_name,
         output_dir=output_dir / "classifier"
     )
+    logger.info(f"Classifier trained and saved best model to {classifier_path}")
     
     # Step 2: Train CAM model if needed (especially for CCAM)
     logger.info(f"Step 2: Training/Preparing {cam_method} model")
-    if cam_method == 'ccam':  # CCAM requires explicit training
+    if cam_method == 'cam':  # CCAM requires explicit training
         cam_model_path = train_cam(
             config_path=config_path,
             method=cam_method,
             backbone=backbone,
-            classifier_path=classifier_path,
             output_dir=output_dir / "cam_model"
         )
+    elif cam_method == 'gradcam':
+        cam_model_path = classifier_path
     else:
-        cam_model_path = classifier_path  # GradCAM uses the classifier directly
-    
+        raise ValueError(f"Unknown CAM method: {cam_method}")
+
     # Step 3: Generate masks using CAM
     logger.info(f"Step 3: Generating masks using {cam_method}")
     masks_dir = generate_masks(
-        config_path=config_path,
+        config=config,
         method=cam_method,
         classifier_path=cam_model_path,
         output_dir=output_dir / "masks",
@@ -399,7 +399,7 @@ def main():
     
     parser.add_argument(
         "--cam", 
-        choices=["gradcam", "ccam"],
+        choices=["gradcam", "cam"],
         default="gradcam",
         help="CAM method"
     )
@@ -462,8 +462,7 @@ def main():
             config_path=args.config,
             backbone=args.backbone,
             initialization=args.init,
-            cam_method=args.cam,
-            output_base_dir=args.output
+            cam_method=args.cam
         )
 
 if __name__ == "__main__":

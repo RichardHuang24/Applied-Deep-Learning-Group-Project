@@ -5,6 +5,8 @@ import os
 import json
 import logging
 from pathlib import Path
+import random
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
@@ -240,6 +242,7 @@ def custom_collate_fn(batch):
     
     return images, labels, paths, filenames
 
+
 def create_dataloaders(config, split='train', batch_size=None, supervision='full', pseudo_masks_dir=None):
     """
     Create dataloaders for training and validation
@@ -297,7 +300,7 @@ def create_dataloaders(config, split='train', batch_size=None, supervision='full
     else:
         # For classification, we only need image and label
         train_dataset = ClassificationDataset(
-            root=dataset_root,
+            root=dataset_root,  # ./dataset
             split='train',
             transform=train_transform
         )
@@ -314,14 +317,14 @@ def create_dataloaders(config, split='train', batch_size=None, supervision='full
         collate_function = None
     else:
         # Use custom collate_fn for ClassificationDataset (handles tuples)
-        collate_function = custom_collate_fn
+        collate_function = None
 
     # Create dataloaders
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=num_workers,    # need to set worker seed for reproducibility
         pin_memory=True,
         collate_fn=collate_function  # Use determined collate function
     )
@@ -330,7 +333,7 @@ def create_dataloaders(config, split='train', batch_size=None, supervision='full
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
+        num_workers=num_workers,    # need to set worker seed for reproducibility
         pin_memory=True,
         collate_fn=collate_function  # Use determined collate function
     )
@@ -338,82 +341,40 @@ def create_dataloaders(config, split='train', batch_size=None, supervision='full
     return train_loader, val_loader
 
 class ClassificationDataset(Dataset):
-    """Dataset for image classification"""
-    
     def __init__(self, root, split='train', transform=None):
-        """
-        Initialize the dataset
-        
-        Args:
-            root: Root directory of the dataset
-            split: Data split ('train', 'val')
-            transform: Image transforms
-        """
-        self.root = root
         self.img_dir = os.path.join(root, 'images')
-        self.split = split
-        self.transform = transform
-        
-        # Load samples
-        self.samples = self._load_annotations(split)
-    
+        ann_path = os.path.join(root, 'annotations', f'{split}.txt')
+
+        # Read image filenames and labels
+        self.samples = []
+        with open(ann_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    fname = parts[0] if parts[0].endswith('.jpg') else parts[0] + '.jpg'
+                    try:
+                        label = int(parts[1])
+                        self.samples.append((fname, label))
+                    except ValueError:
+                        raise ValueError("Invalid label in annotation file. Ensure labels are integers.")
+
+        self.transform = transform or transforms.ToTensor()
+
     def __len__(self):
-        """Return the number of samples"""
         return len(self.samples)
-    
+
     def __getitem__(self, idx):
-        """Get a sample from the dataset"""
-        img_file, label = self.samples[idx]
-        
-        # Handle image path correctly
-        if img_file.endswith('.jpg'):
-            img_path = os.path.join(self.img_dir, img_file)
-        else:
-            img_path = os.path.join(self.img_dir, f"{img_file}.jpg")
-        
-        # Load image and convert to tensor
+        fname, label = self.samples[idx]
+        path = os.path.join(self.img_dir, fname)
+
         try:
-            img = Image.open(img_path).convert('RGB')
-            if self.transform:
-                # This should convert PIL image to tensor with proper normalization
-                img = self.transform(img)
-        except Exception as e:
-            print(f"Error loading image {img_path}: {e}")
-            # Return dummy data on error
-            img = torch.zeros(3, 224, 224)
-        
-        # Ensure label is an integer
-        try:
-            label = int(label)
-        except (ValueError, TypeError):
-            print(f"Warning: Invalid label {label}, using 0")
-            label = 0
-        
-        # The image should be a tensor of shape [3, H, W]
-        # The label should be a simple integer
-        # The img_path and img_file should be strings
-        return img, label, img_path, img_file
-    
-    def _load_annotations(self, split):
-        """Load annotations from file"""
-        annotations_path = os.path.join(self.root, 'annotations', f'{split}.txt')
-        
-        samples = []
-        try:
-            with open(annotations_path, 'r') as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) >= 2:
-                        filename = parts[0]
-                        try:
-                            class_id = int(parts[1])
-                            samples.append((filename, class_id))
-                        except ValueError:
-                            print(f"Warning: Skipping sample with invalid class ID: {parts[1]}")
-        except Exception as e:
-            print(f"Error loading annotations from {annotations_path}: {e}")
-        
-        return samples
+            img = Image.open(path).convert('RGB')
+        except:
+            logger.warning(f"Failed to open image {path}. Using blank image instead.")
+            img = Image.new('RGB', (224, 224))  # fallback blank image
+
+        img = self.transform(img)
+        return img, label
 
 class SegmentationDataset(Dataset):
     """Dataset for semantic segmentation"""
@@ -479,20 +440,14 @@ class SegmentationDataset(Dataset):
         else: # Ensure image is a tensor if no transform applied
             img = transforms.ToTensor()(img)
 
-        # Process mask: Resize, map values, convert to LongTensor [H, W]
-        # Resize mask to match image size (assuming 224x224 based on transforms)
         mask = mask.resize((224, 224), Image.NEAREST) # Use NEAREST for class labels
 
         # Convert mask to numpy array
         mask_np = np.array(mask)
 
-        # Map values to 0 (background) and 1 (foreground)
-        # Trimap: 1=FG->1, 2=BG->0, 3=Boundary->0
-        # Generated Mask: 255=FG->1, 0=BG->0
         final_mask = np.zeros_like(mask_np, dtype=np.int64) # Target type for CrossEntropyLoss
         final_mask[mask_np == 1] = 1    # Trimap foreground
         final_mask[mask_np == 255] = 1  # Generated mask foreground
-        # Pixels with value 0 (generated BG), 2 (trimap BG), 3 (trimap boundary) remain 0
 
         # Convert to LongTensor [H, W]
         mask = torch.from_numpy(final_mask).long()

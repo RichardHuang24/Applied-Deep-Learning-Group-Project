@@ -44,32 +44,27 @@ def setup_device(seed):
     logger.info(f"Using device: {device}")
     return device
 
-def train_classifier(config_path, experiment, output_dir=None):
+def train_classifier(config, experiment, output_dir=None):
     """
     Train a classifier with the specified configuration
     
     Args:
-        config_path: Path to configuration file
+        config: Path to configuration file
         experiment: Experiment name (e.g., 'resnet18_imagenet')
         output_dir: Output directory
         
     Returns:
         str: Path to saved checkpoint
     """
-    # Load configuration
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
     # Set up output directory
-    if output_dir is None:
-        output_dir = os.path.join(config.get('paths', {}).get('outputs', 'outputs'), 'classifiers', experiment)
     os.makedirs(output_dir, exist_ok=True)
     
     # Set up logging
-    setup_logging(os.path.join(output_dir, 'training.log'))
+    setup_logging(os.path.join(output_dir, 'training_classifier.log'))
     
-    # Set up device
+    # Set up device, set seed
     device = setup_device(config.get('training', {}).get('seed', 42))
+    logger.info(f"Using device: {device}")
     
     # Extract training parameters from config
     training_config = config.get('training', {})
@@ -81,16 +76,12 @@ def train_classifier(config_path, experiment, output_dir=None):
     # Parse experiment name to get backbone and initialization
     parts = experiment.split('_')
     if len(parts) >= 2:
-        backbone_name = parts[0]
-        initialization = parts[1]
+        backbone_name = parts[0]    # resnet50
+        initialization = parts[1]   # random
     else:
         backbone_name = 'resnet18'  # Default backbone
         initialization = 'imagenet'  # Default initialization
-    
-    # Extract dataset information
-    dataset_config = config.get('dataset', {})
-    # num_classes = dataset_config.get('num_classes', 37)  # Default to Pet dataset classes
-    
+
     try:
         # Create dataloaders
         train_loader, val_loader = create_dataloaders(
@@ -102,7 +93,7 @@ def train_classifier(config_path, experiment, output_dir=None):
         
         # Create model
         logger.info(f"Creating {backbone_name} model with {initialization} initialization")
-        model = create_classifier(config_path, experiment)
+        model = create_classifier(config, experiment)
         model = model.to(device)
         
         # Set up criterion and optimizer
@@ -115,6 +106,8 @@ def train_classifier(config_path, experiment, output_dir=None):
         
         # Training loop
         best_acc = 0.0
+        checkpoint_path = os.path.join(output_dir, 'best_model.pth')
+
         for epoch in range(num_epochs):
             model.train()
             running_loss = 0.0
@@ -124,10 +117,10 @@ def train_classifier(config_path, experiment, output_dir=None):
             logger.info(f"Epoch {epoch+1}/{num_epochs}")
             
             # Training step
-            for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training")):
+            for batch_idx, (imgs, labels) in enumerate(tqdm(train_loader, desc="Training Classifier")):
                 # Extract data
-                images = batch[0].to(device)
-                labels = batch[1].to(device)
+                images = imgs.to(device)
+                labels = labels.to(device)
                 
                 # Debugging info (first batch only)
                 if batch_idx == 0 and epoch == 0:
@@ -135,20 +128,16 @@ def train_classifier(config_path, experiment, output_dir=None):
                     logger.info(f"Labels shape: {labels.shape}")
                     logger.info(f"Label values: {labels}")
                 
-                # Zero gradients
                 optimizer.zero_grad()
-                
-                # Forward pass
                 try:
                     outputs = model(images)
+
                     loss = criterion(outputs, labels)
-                    
-                    # Backward pass and optimize
                     loss.backward()
                     optimizer.step()
                     
                     # Statistics
-                    running_loss += loss.item() * images.size(0)
+                    running_loss += loss.detach().item() * images.size(0)
                     _, predicted = torch.max(outputs, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
@@ -195,16 +184,15 @@ def train_classifier(config_path, experiment, output_dir=None):
             # Save best model
             if val_epoch_acc > best_acc:
                 best_acc = val_epoch_acc
-                checkpoint_path = os.path.join(output_dir, 'best_model.pth')
                 torch.save(model.state_dict(), checkpoint_path)
                 logger.info(f"Saved best model with acc: {best_acc:.4f}")
         
-        # Save final model
-        final_checkpoint_path = os.path.join(output_dir, 'final_model.pth')
-        torch.save(model.state_dict(), final_checkpoint_path)
+        # # Save final model
+        # final_checkpoint_path = os.path.join(output_dir, 'final_model.pth')
+        # torch.save(model.state_dict(), final_checkpoint_path)
         logger.info(f"Training completed. Best accuracy: {best_acc:.4f}")
         
-        return final_checkpoint_path
+        return checkpoint_path
     
     except Exception as e:
         logger.error(f"Error in train_classifier: {str(e)}")
