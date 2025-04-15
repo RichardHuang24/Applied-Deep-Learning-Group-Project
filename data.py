@@ -308,6 +308,14 @@ def create_dataloaders(config, split='train', batch_size=None, supervision='full
             transform=val_transform
         )
     
+    # Determine collate_fn based on dataset type
+    if supervision == 'full' or supervision.startswith('weak_'):
+        # Use default collate_fn for SegmentationDataset (handles dictionaries)
+        collate_function = None
+    else:
+        # Use custom collate_fn for ClassificationDataset (handles tuples)
+        collate_function = custom_collate_fn
+
     # Create dataloaders
     train_loader = DataLoader(
         train_dataset,
@@ -315,7 +323,7 @@ def create_dataloaders(config, split='train', batch_size=None, supervision='full
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
-        collate_fn=custom_collate_fn
+        collate_fn=collate_function  # Use determined collate function
     )
     
     val_loader = DataLoader(
@@ -324,7 +332,7 @@ def create_dataloaders(config, split='train', batch_size=None, supervision='full
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        collate_fn=custom_collate_fn
+        collate_fn=collate_function  # Use determined collate function
     )
     
     return train_loader, val_loader
@@ -465,34 +473,31 @@ class SegmentationDataset(Dataset):
             # If mask doesn't exist, create a blank mask
             mask = Image.new('L', img.size, 0)
         
-        # Resize both image and mask to the same size
+        # Apply image transform first
         if self.transform:
-            # Logging info - img / mask size before transform
-            logger.debug(f"Image size before transform: {img.size}")
-            logger.debug(f"Mask size before transform: {mask.size}")
-            img = self.transform(img)
-            
-            # Logging info - img / mask size after transform
-            logger.debug(f"Image size after transform: {img.size}")
-            logger.debug(f"Mask size after transform: {mask.size}")
+            img = self.transform(img) # PIL -> Tensor [C, H, W]
+        else: # Ensure image is a tensor if no transform applied
+            img = transforms.ToTensor()(img)
 
-        # Convert mask to tensor and adjust labels if needed
-        # to_tensor = transforms.ToTensor()
-        # mask_tensor = to_tensor(mask) * 255  # Scale mask to [0, 255]
-        # mask_tensor = mask_tensor.long()
-        
-        # mask = transforms.ToTensor()(mask) * 255
-        
-        # Convert single-channel mask to class indices (H, W)
-        # mask = mask.squeeze(0).long()
+        # Process mask: Resize, map values, convert to LongTensor [H, W]
+        # Resize mask to match image size (assuming 224x224 based on transforms)
+        mask = mask.resize((224, 224), Image.NEAREST) # Use NEAREST for class labels
 
-        mask_transform = transforms.Compose([
-            transforms.Resize((224, 224)),  # Resize to match image size
-            transforms.ToTensor()
-        ])
+        # Convert mask to numpy array
+        mask_np = np.array(mask)
 
-        mask = mask_transform(mask)
+        # Map values to 0 (background) and 1 (foreground)
+        # Trimap: 1=FG->1, 2=BG->0, 3=Boundary->0
+        # Generated Mask: 255=FG->1, 0=BG->0
+        final_mask = np.zeros_like(mask_np, dtype=np.int64) # Target type for CrossEntropyLoss
+        final_mask[mask_np == 1] = 1    # Trimap foreground
+        final_mask[mask_np == 255] = 1  # Generated mask foreground
+        # Pixels with value 0 (generated BG), 2 (trimap BG), 3 (trimap boundary) remain 0
 
+        # Convert to LongTensor [H, W]
+        mask = torch.from_numpy(final_mask).long()
+
+        # Return image tensor and mask tensor
         return img, mask, img_path, img_file
     
     def _load_annotations(self, split):

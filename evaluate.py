@@ -160,7 +160,6 @@ def evaluate(config_path, supervision='full', checkpoint_path=None, output_dir=N
     
     _, val_loader = create_dataloaders(
         config_path=config_path,
-        mode='segmentation',
         supervision=supervision,
         pseudo_masks_dir=pseudo_masks_dir
     )
@@ -177,8 +176,8 @@ def evaluate(config_path, supervision='full', checkpoint_path=None, output_dir=N
     else:
         logger.warning("No checkpoint provided. Using random weights.")
     
-    # Set number of classes
-    num_classes = config['dataset']['num_classes'] + 1  # Add background class
+    # Set number of classes for segmentation (Foreground/Background)
+    num_classes = 2  # Always 2 classes for this segmentation task
     
     # Create output directory for visualizations
     vis_dir = output_dir / "visualizations"

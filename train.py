@@ -94,7 +94,7 @@ def train_classifier(config_path, experiment, output_dir=None):
     try:
         # Create dataloaders
         train_loader, val_loader = create_dataloaders(
-            supervision='test',
+            supervision='classification', # More explicit for clarity
             config=config,
             split='train', 
             batch_size=batch_size
@@ -430,11 +430,11 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
     num_classes = 2
     
     for images, masks, _, _ in tqdm(dataloader, desc="Training"):
-        # Size
-        print(f"Image size: {images.size()}")
-        print(f"Mask size: {masks.size()}")
-        # Logging
-        logger.info(f"Image shape: {images.shape}, Mask shape: {masks.shape}")
+        # # Size
+        # print(f"Image size: {images.size()}")
+        # print(f"Mask size: {masks.size()}")
+        # # # Logging
+        # # logger.info(f"Image shape: {images.shape}, Mask shape: {masks.shape}")
 
         images, masks = images.to(device), masks.to(device)
         
@@ -443,10 +443,10 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
         
         # Handle auxiliary loss if present
         if isinstance(outputs, tuple):
-            # Size
-            print(f"Output size: {outputs[0].size()}")
-            # Logging
-            logger.info(f"Output shape: {outputs[0].shape}, Aux output shape: {outputs[1].shape}")
+            # # Size
+            # print(f"Output size: {outputs[0].size()}")
+            # # Logging
+            # logger.info(f"Output shape: {outputs[0].shape}, Aux output shape: {outputs[1].shape}")
 
             outputs, aux_outputs = outputs
             loss = criterion(outputs, masks) + 0.4 * criterion(aux_outputs, masks)
