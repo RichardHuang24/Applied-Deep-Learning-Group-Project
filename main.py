@@ -281,76 +281,97 @@ def run_all_experiments(config_path, output_base_dir=None):
     return all_results
 
 def create_results_table(output_dir, all_results, backbones, initializations, cam_methods):
-    """Create a visual table of all experiment results similar to the provided image"""
-    # Create image to hold table
+    """Create a visual table of all experiment results"""
+    # Setup dimensions
     cell_width, cell_height = 150, 80
     header_height = 60
-    
     width = cell_width * (len(initializations) + 1)
     height = header_height + cell_height * (len(backbones) * len(cam_methods) + 1)
     
+    # Create image and drawing context
     table = Image.new('RGB', (width, height), color='white')
     draw = ImageDraw.Draw(table)
     
-    # Draw grid lines
-    for i in range(len(initializations) + 2):
-        x = i * cell_width
-        draw.line([(x, 0), (x, height)], fill='black', width=2)
+    # Draw grid and headers
+    draw_grid_lines(draw, width, height, cell_width, cell_height, header_height, 
+                   len(initializations), len(backbones), len(cam_methods))
+    draw_headers(draw, initializations, cell_width, header_height)
     
-    for j in range(len(backbones) * len(cam_methods) + 3):
-        y = j * cell_height if j > 0 else header_height
-        draw.line([(0, y), (width, y)], fill='black', width=2)
-    
-    # Draw column headers (initializations)
-    draw.text((20, 20), "Model", fill='black')
-    for i, init in enumerate(initializations):
-        x = (i + 1) * cell_width + 20
-        draw.text((x, 20), init, fill='black')
-    
-    # Draw row headers (backbones and CAM methods)
-    row = 1
-    for backbone in backbones:
-        for cam in cam_methods:
-            y = header_height + (row - 1) * cell_height + 20
-            draw.text((20, y), f"{backbone}\n{cam}", fill='black')
-            row += 1
-    
-    # Fill in results
-    row = 1
-    for backbone in backbones:
-        for cam_method in cam_methods:
-            for i, initialization in enumerate(initializations):
-                exp_name = f"{backbone}_{initialization}_{cam_method}"
-                
-                if exp_name in all_results:
-                    result = all_results[exp_name]
-                    pixel_acc = result['metrics']['pixel_acc']
-                    miou = result['metrics']['miou']
-                    
-                    x = (i + 1) * cell_width + 20
-                    y = header_height + (row - 1) * cell_height + 20
-                    
-                    # Color code the cell based on mIoU performance
-                    # Normalize between 0 and 1 (assuming mIoU is between 0 and 1)
-                    color_val = int(255 * miou)
-                    cell_color = (255, 255 - color_val, 255 - color_val)  # Red to white gradient
-                    
-                    # Draw colored cell background
-                    x1 = i * cell_width + cell_width
-                    y1 = header_height + (row - 1) * cell_height
-                    x2 = x1 + cell_width
-                    y2 = y1 + cell_height
-                    draw.rectangle([x1, y1, x2, y2], fill=cell_color, outline="black")
-                    
-                    # Draw text
-                    draw.text((x, y), f"PA: {pixel_acc:.2f}\nmIoU: {miou:.2f}", fill='black')
-            
-            row += 1
+    # Fill results
+    draw_results(draw, all_results, backbones, initializations, cam_methods, 
+                cell_width, cell_height, header_height)
     
     # Save table
     table_path = output_dir / "results_table.png"
     table.save(table_path)
     logger.info(f"Results table saved to {table_path}")
+    
+def draw_grid_lines(draw, width, height, cell_width, cell_height, header_height, 
+                   num_init, num_backbones, num_cam):
+    """Draw grid lines for the table"""
+    # Draw vertical lines
+    for i in range(num_init + 2):
+        x = i * cell_width
+        draw.line([(x, 0), (x, height)], fill='black', width=2)
+    
+    # Draw horizontal lines
+    for j in range(num_backbones * num_cam + 3):
+        y = j * cell_height if j > 0 else header_height
+        draw.line([(0, y), (width, y)], fill='black', width=2)
+
+def draw_headers(draw, initializations, cell_width, header_height):
+    """Draw column and row headers"""
+    # Draw model header
+    draw.text((20, 20), "Model", fill='black')
+    
+    # Draw initialization headers
+    for i, init in enumerate(initializations):
+        x = (i + 1) * cell_width + 20
+        draw.text((x, 20), init, fill='black')
+
+def draw_results(draw, all_results, backbones, initializations, cam_methods, 
+                cell_width, cell_height, header_height):
+    """Draw result cells with color coding"""
+    row = 1
+    
+    for backbone in backbones:
+        for cam_method in cam_methods:
+            # Draw row header
+            y = header_height + (row - 1) * cell_height + 20
+            draw.text((20, y), f"{backbone}\n{cam_method}", fill='black')
+            
+            # Draw results for each initialization
+            for i, initialization in enumerate(initializations):
+                exp_name = f"{backbone}_{initialization}_{cam_method}"
+                
+                if exp_name in all_results:
+                    draw_result_cell(draw, all_results[exp_name], i, row, 
+                                   cell_width, cell_height, header_height)
+            
+            row += 1
+
+def draw_result_cell(draw, result, col_idx, row_idx, cell_width, cell_height, header_height):
+    """Draw individual result cell with color coding"""
+    pixel_acc = result['metrics']['pixel_acc']
+    miou = result['metrics']['miou']
+    
+    # Calculate position
+    x = (col_idx + 1) * cell_width + 20
+    y = header_height + (row_idx - 1) * cell_height + 20
+    
+    # Color code based on mIoU
+    color_val = int(255 * miou)
+    cell_color = (255, 255 - color_val, 255 - color_val)  # Red to white gradient
+    
+    # Draw colored background
+    x1 = col_idx * cell_width + cell_width
+    y1 = header_height + (row_idx - 1) * cell_height
+    x2 = x1 + cell_width
+    y2 = y1 + cell_height
+    draw.rectangle([x1, y1, x2, y2], fill=cell_color, outline="black")
+    
+    # Draw metrics text
+    draw.text((x, y), f"PA: {pixel_acc:.2f}\nmIoU: {miou:.2f}", fill='black')
 
 def main():
     """Main entry point for the experiment runner"""

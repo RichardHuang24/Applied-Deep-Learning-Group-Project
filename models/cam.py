@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import yaml
+import json
 import logging
 from PIL import Image
 
@@ -232,7 +232,7 @@ class CCAM(nn.Module):
         return np.array(batch_cams)
 
 
-def create_cam_model(config_path='config.yaml', method='ccam', backbone='resnet18'):
+def create_cam_model(config_path='config.json', method='ccam', backbone='resnet18'):
     """
     Factory function to create CAM models
     
@@ -246,7 +246,7 @@ def create_cam_model(config_path='config.yaml', method='ccam', backbone='resnet1
     """
     # Load configuration
     with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
+        config = json.load(f)
     
     num_classes = config['dataset']['num_classes']
     
