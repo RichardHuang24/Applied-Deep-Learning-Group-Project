@@ -21,13 +21,11 @@ This framework implements a full pipeline for Weakly-Supervised Semantic Segment
 - Python 3.6+
 - PyTorch 1.7+
 - CUDA (recommended for faster training)
-- **Additional dependencies**:  
-  Only 3 allowed in this minimal setup:  
+- **Additional dependencies**: 
   - `torch`  
-  - `torchvision`  
-  - `opencv-python`
-
-(Use optional tools like PIL, tqdm, numpy, matplotlib for more advanced visualization if constraints allow.)
+  - `Pillow`  
+  - `tqdm`
+  - `numpy`
 
 ---
 
@@ -198,10 +196,12 @@ python main.py --all
 ├── evaluate.py              # Evaluation utilities
 ├── utils/                   # Utility functions
 │   └── download.py          # Dataset utils
+│   └── metrics.py           # Evaluation metrics
+│   └── visualization.py     # PIL-based visualization
 ├── models/
-│   ├── classifier/          # ResNet-based classifiers
-│   ├── cam/                 # CAM methods: GradCAM, CCAM
-│   └── segmentation/        # PSPNet (semantic segmentation)
+│   ├── classifier.py        # ResNet-based classifiers
+│   ├── cam.py               # CAM methods: GradCAM, CCAM
+│   └── pspnet.py/           # PSPNet (semantic segmentation)
 ├── data/                    # Dataset handling
 ├── config.json              # Default experiment configuration
 └── requirements.txt         # Dependencies
