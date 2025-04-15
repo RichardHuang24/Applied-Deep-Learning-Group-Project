@@ -35,19 +35,19 @@ class ResNetClassifier(nn.Module):
         # Create backbone
         if backbone == 'resnet18':
             if initialization == 'imagenet':
-                self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+                self.model = torch.hub.load('pytorch/vision', 'resnet18', pretrained=True)
             else:
-                self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
+                self.model = torch.hub.load('pytorch/vision', 'resnet18', pretrained=False)
         elif backbone == 'resnet34':
             if initialization == 'imagenet':
-                self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet34', pretrained=True)
+                self.model = torch.hub.load('pytorch/vision', 'resnet34', pretrained=True)
             else:
-                self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet34', pretrained=False)
+                self.model = torch.hub.load('pytorch/vision', 'resnet34', pretrained=False)
         elif backbone == 'resnet50':
             if initialization == 'imagenet':
-                self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True)
+                self.model = torch.hub.load('pytorch/vision', 'resnet50', pretrained=True)
             else:
-                self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=False)
+                self.model = torch.hub.load('pytorch/vision', 'resnet50', pretrained=False)
         else:
             raise ValueError(f"Unsupported backbone: {backbone}")
         
