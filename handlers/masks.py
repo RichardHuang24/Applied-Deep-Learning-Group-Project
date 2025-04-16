@@ -33,7 +33,8 @@ def handle_generate_masks(args, model_path=None):
         method=args.cam,
         classifier_path=model_path,
         output_dir=output_dir,
-        threshold=threshold
+        threshold=threshold,
+        args=args
     )
 
     logger.info(f"Masks saved to: {masks_dir}")

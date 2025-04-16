@@ -51,7 +51,7 @@ def generate_mask_for_image(cam_model, image, target_class=None, threshold=0.4):
     return torch.tensor(mask.squeeze())
 
 def generate_masks(config, method='gradcam', classifier_path=None, output_dir=None,
-                  visualize=False, threshold=0.4):
+                  visualize=False, threshold=0.4, args=None):
     """
     Generate pseudo masks for all images using CAM
     
@@ -97,7 +97,8 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
 
     # Create CAM model
     if method == 'gradcam':
-        classifier = create_classifier(config)
+        exp_name = f"{args.backbone}_{args.init}"
+        classifier = create_classifier(config, exp_name)
         classifier.load_state_dict(torch.load(classifier_path, map_location=device))
         classifier = classifier.to(device)
         cam_model = GradCAMForMask(classifier)
