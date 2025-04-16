@@ -12,11 +12,10 @@ import logging
 from pathlib import Path
 import time
 from datetime import datetime
-
+import data
 from models.classifier import create_classifier
 from models.cam import create_cam_model
 from models.pspnet import create_segmentation_model
-from data import create_dataloaders
 from utils.metrics import calculate_metrics
 
 logger = logging.getLogger(__name__)
@@ -84,12 +83,8 @@ def train_classifier(config, experiment, output_dir=None):
 
     try:
         # Create dataloaders
-        train_loader, val_loader = create_dataloaders(
-            supervision='classification', # More explicit for clarity
-            config=config,
-            split='train', 
-            batch_size=batch_size
-        )
+        train_loader = data.data_loaders(split='train', batch_size=batch_size)
+        val_loader = data.data_loaders(split='val', batch_size=batch_size, shuffle=False)
         
         # Create model
         logger.info(f"Creating {backbone_name} model with {initialization} initialization")

@@ -24,7 +24,8 @@ def main():
     parser_classifier.add_argument("--config_path", required=True)
     parser_classifier.add_argument("--backbone", required=True)
     parser_classifier.add_argument("--init", required=True)
-    parser_classifier.add_argument("--experiment-name", default=None)
+    parser_classifier.add_argument("--cam", required=True, choices=["gradcam", "cam"])
+    parser_classifier.add_argument("--experiment_name", default=None)
     parser_classifier.set_defaults(func=handle_train_classifier)
 
     # --- Generate Masks
@@ -33,8 +34,8 @@ def main():
     parser_masks.add_argument("--cam", required=True, choices=["gradcam", "cam"])
     parser_masks.add_argument("--model_path", required=True)
     parser_masks.add_argument("--backbone", required=True)
+    parser_masks.add_argument("--experiment_name", default=None)
     parser_masks.add_argument("--init", required=True)
-    parser_masks.add_argument("--experiment_name", required=True)
     parser_masks.set_defaults(func=handle_generate_masks)
 
     # --- Train + Generate
@@ -98,12 +99,6 @@ def handle_run_all(args):
 
     # Step 2: Optionally train CAM model (if using CAM/CCAM)
     if args.cam == "cam":
-        # handle_train_cam(Namespace(
-        #     config=args.config,
-        #     backbone=args.backbone,
-        #     cam=args.cam,
-        #     experiment=experiment
-        # ))
         pass
         model_path = f"outputs/experiments/{experiment}/cam_model/best_model.pth"
     else:

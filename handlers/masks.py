@@ -3,13 +3,15 @@ import logging
 from utils.load_config import load_config
 from utils.logging import setup_logging
 from generate_masks import generate_masks
+import time
 
 def handle_generate_masks(args, model_path=None):
     config = args.config
 
-    if not args.experiment_name:
-        raise ValueError("You must provide --experiment-name when running generate_masks independently.")
-
+    if args.experiment_name is None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        args.experiment_name = args.experiment_name or f"{args.backbone}_{args.init}_{args.cam}_{timestamp}"
+    
     output_dir = Path(config['paths']['outputs']) / "experiments" / args.experiment_name / "masks"
     output_dir.mkdir(parents=True, exist_ok=True)
 

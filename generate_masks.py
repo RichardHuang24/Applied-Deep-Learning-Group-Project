@@ -15,7 +15,6 @@ from PIL import Image
 import data
 from models.classifier import create_classifier
 from models.cam import GradCAM, create_cam_model, GradCAMForMask
-from data import create_dataloaders
 from utils.visualization import visualize_cam
 
 logger = logging.getLogger(__name__)
@@ -80,14 +79,7 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
         vis_dir.mkdir(parents=True, exist_ok=True)
     
     # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(output_dir / "generation.log"),
-            logging.StreamHandler()
-        ]
-    )
+    logger = logging.getLogger("Generate Masks")
     
     logger.info(f"Generating masks using {method}")
     
@@ -110,8 +102,7 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
 
 
     # Create dataloaders
-    all_dataset = data.OxfordPetDataset(split='all')
-    all_dataloader = data.data_loaders(all_dataset, batch_size=1, shuffle=False)
+    all_dataloader = data.data_loaders(split='all', batch_size=1, shuffle=False)
     
     # Generate masks for all images
     for image, label, fname in tqdm(all_dataloader, desc=f"Generating masks with {method}"):
