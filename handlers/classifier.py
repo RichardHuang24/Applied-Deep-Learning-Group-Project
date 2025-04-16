@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 
 def handle_train_classifier(args):
-    config = load_config(args.config_path)
+    config = args.config
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     experiment_name = args.experiment_name or f"{args.backbone}_{args.init}_{args.cam}_{timestamp}"

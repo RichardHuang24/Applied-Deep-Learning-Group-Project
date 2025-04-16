@@ -5,7 +5,7 @@ from utils.logging import setup_logging
 from generate_masks import generate_masks
 
 def handle_generate_masks(args, model_path=None):
-    config = load_config(args.config_path)
+    config = args.config
 
     if not args.experiment_name:
         raise ValueError("You must provide --experiment-name when running generate_masks independently.")
