@@ -174,9 +174,6 @@ def create_segmentation_model(config_path='config.json', backbone='resnet50'):
     Returns:
         PSPNet instance
     """
-    # Load configuration
-    with open(config_path, 'r') as f:
-        config = json.load(f)
     
     return PSPNet(
         num_classes=2,
