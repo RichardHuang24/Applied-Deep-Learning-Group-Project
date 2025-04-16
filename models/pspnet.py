@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import json
 import logging
+from torchvision import models 
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class PSPNet(nn.Module):
     """
     PSPNet implementation with configurable backbone
     """
-    def __init__(self, num_classes=2, backbone='resne50', pretrained=True):
+    def __init__(self, num_classes=2, backbone='resnet50', pretrained=True):
         """
         Initialize PSPNet
         
@@ -86,36 +87,26 @@ class PSPNet(nn.Module):
         """
         super(PSPNet, self).__init__()
         
-        # Create backbone
+        # Create backbone using torchvision.models
         if backbone == 'resnet18':
-            base_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=pretrained)
-            layers = list(base_model.children())
-            self.layer0 = nn.Sequential(*layers[:4])  # Initial layers before stride=2
-            self.layer1 = layers[4]  # First residual block
-            self.layer2 = layers[5]  # Second residual block
-            self.layer3 = layers[6]  # Third residual block
-            self.layer4 = layers[7]  # Fourth residual block
+            base_model = models.resnet18(pretrained=pretrained)
             feature_channels = 512
         elif backbone == 'resnet34':
-            base_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet34', pretrained=pretrained)
-            layers = list(base_model.children())
-            self.layer0 = nn.Sequential(*layers[:4])
-            self.layer1 = layers[4]
-            self.layer2 = layers[5]
-            self.layer3 = layers[6]
-            self.layer4 = layers[7]
+            base_model = models.resnet34(pretrained=pretrained)
             feature_channels = 512
         elif backbone == 'resnet50':
-            base_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=pretrained)
-            layers = list(base_model.children())
-            self.layer0 = nn.Sequential(*layers[:4])
-            self.layer1 = layers[4]
-            self.layer2 = layers[5]
-            self.layer3 = layers[6]
-            self.layer4 = layers[7]
+            base_model = models.resnet50(pretrained=pretrained)
             feature_channels = 2048
         else:
             raise ValueError(f"Unsupported backbone: {backbone}")
+
+        layers = list(base_model.children())
+        self.layer0 = nn.Sequential(*layers[:4])  # Conv1 + BN + ReLU + MaxPool
+        self.layer1 = layers[4]
+        self.layer2 = layers[5]
+        self.layer3 = layers[6]
+        self.layer4 = layers[7]
+
         
         # PSP Module
         self.psp = PSPModule(
@@ -186,8 +177,6 @@ def create_segmentation_model(config_path='config.json', backbone='resnet50'):
     # Load configuration
     with open(config_path, 'r') as f:
         config = json.load(f)
-    
-    # num_classes = config['dataset']['num_classes'] + 1  # Add background class
     
     return PSPNet(
         num_classes=2,
