@@ -21,5 +21,8 @@ __all__ = [
     
     # Visualization
     'tensor_to_pil', 'create_mask_overlay', 'visualize_prediction',
-    'visualize_cam', 'visualize_results_grid'
+    'visualize_cam', 'visualize_results_grid',
+
+    # Other utilities
+    'logging', 'load_config'
 ]

@@ -84,7 +84,11 @@ python main.py
 Customize experiments with the following options:
 
 ```bash
-python main.py --backbone resnet50 --init imagenet --cam gradcam
+python main.py train_and_generate \
+  --config_path config.json \
+  --backbone resnet50 \
+  --init imagenet \
+  --cam gradcam
 ```
 
 #### ✅ Available Options

@@ -7,9 +7,12 @@ import json
 import logging
 import numpy as np
 from pathlib import Path
+
+from torch.utils.data import random_split
 from tqdm import tqdm
 from PIL import Image
 
+import data
 from models.classifier import create_classifier
 from models.cam import GradCAM, create_cam_model, GradCAMForMask
 from data import create_dataloaders
@@ -106,14 +109,11 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
 
 
     # Create dataloaders
-    train_loader, _ = create_dataloaders(
-        config=config,
-        supervision="generate_masks",
-        batch_size=1  # Process one image at a time
-    )
+    all_dataset = data.OxfordPetDataset(split='all')
+    all_dataloader = data.data_loaders(all_dataset, batch_size=1, shuffle=False)
     
     # Generate masks for all images
-    for image, label, fname in tqdm(train_loader, desc=f"Generating masks with {method}"):
+    for image, label, fname in tqdm(all_dataloader, desc=f"Generating masks with {method}"):
         mask_name = fname[0].split(".")[0] + ".png"
         mask_path = masks_dir / f"{mask_name}"
 
@@ -123,15 +123,14 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
                 image.to(device),
                 target_class=label,
                 orig_size=(224, 224),  # or actual image size if needed
-                threshold=0.4
+                threshold=threshold
             )
 
             # Save binary mask
             cam_model.save_mask(binary_mask, mask_path)
 
         except Exception as e:
-            print(f"Error processing {fname}: {e}")
-            continue
+            raise ValueError(f"Error processing {fname}: {e}")
 
     
     logger.info(f"Generated {method} masks for all images. Saved to {masks_dir}")

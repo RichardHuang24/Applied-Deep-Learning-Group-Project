@@ -60,7 +60,7 @@ def train_classifier(config, experiment, output_dir=None):
     os.makedirs(output_dir, exist_ok=True)
     
     # Set up logging
-    setup_logging(os.path.join(output_dir, 'training_classifier.log'))
+    logger = logging.getLogger("Train Classifier")
     
     # Set up device, set seed
     device = setup_device(config.get('training', {}).get('seed', 42))
