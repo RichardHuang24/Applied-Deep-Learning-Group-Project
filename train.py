@@ -208,6 +208,10 @@ def train_segmentation(config_path, supervision='full', pseudo_masks_dir=None, n
             supervision=supervision,
             pseudo_masks_dir=pseudo_masks_dir
         )
+        train_loader = data.data_loaders(
+            split='train',
+            batch_size=config['training']['batch_size'],
+            return_pseudomask=True,
         
         # Setup training tools
         criterion = nn.CrossEntropyLoss()

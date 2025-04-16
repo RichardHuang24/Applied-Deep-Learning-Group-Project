@@ -16,7 +16,10 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True):
+def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True, return_bbox=False,
+                  return_trimaps=False, return_pseudomask=False,
+                  label_type="breed", transform=None, transform_trimaps=None,
+                  transform_pseudomasks=None):
     """
     Create data loaders for the dataset
 
@@ -28,7 +31,14 @@ def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True):
     Returns:
         DataLoader: Data loader for the dataset
     """
-    dataset = OxfordPetDataset(split=split)
+    dataset = OxfordPetDataset(split=split,
+                               transform=transform,
+                               return_bbox=return_bbox,
+                               return_trimaps=return_trimaps,
+                               return_pseudomask=return_pseudomask,
+                               transform_trimaps=transform_trimaps,
+                               transform_pseudomasks=transform_pseudomasks,
+                               label_type=label_type)
     print(f"Loaded {len(dataset)} samples for split={split}")
 
     return DataLoader(
@@ -41,9 +51,9 @@ def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True):
 
 def get_train_transform():
     train_transform = transforms.Compose([
-        transforms.Resize((224, 224)),  # Fixed size for all images
+        transforms.Resize((256, 256)),  # Fixed size for all images
         transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),
+        transforms.RandomCrop((224, 224)),  # Random crop to 224x224
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -58,6 +68,12 @@ def get_val_transform():
     ])
 
     return val_transform
+
+def get_trimap_transform():
+    return transforms.Compose([
+        transforms.Resize((224, 224)),  # Resize trimaps to match image size
+        transforms.ToTensor()
+    ])
 
 class OxfordPetDataset(Dataset):
     def __init__(self, root="dataset", root1="WSOL", split="trainval", transform=None,
@@ -82,7 +98,12 @@ class OxfordPetDataset(Dataset):
 
         if self.transform is None:
             self.transform = get_train_transform() if split == "train" else get_val_transform()
-
+        
+        if self.return_trimaps and self.transform_trimaps is None:
+            self.transform_trimaps = get_trimap_transform()
+        if self.return_pseudomask and self.transform_pseudomasks is None:
+            self.transform_pseudomasks = get_trimap_transform()
+            
         # Load annotation list
         list_path = os.path.join(self.annotation_dir, f"{split}.txt") if split != "all" else os.path.join(self.annotation_dir, "list.txt")
 
