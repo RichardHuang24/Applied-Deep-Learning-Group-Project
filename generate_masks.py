@@ -11,7 +11,7 @@ from tqdm import tqdm
 from PIL import Image
 
 from models.classifier import create_classifier
-from models.cam import GradCAM, create_cam_model
+from models.cam import GradCAM, create_cam_model, GradCAMForMask
 from data import create_dataloaders
 from utils.visualization import visualize_cam
 
@@ -42,15 +42,9 @@ def generate_mask_for_image(cam_model, image, target_class=None, threshold=0.4):
     
     # Binarize using threshold
     mask = (cam > threshold).astype(np.uint8)
-    
-    # Add background as class 0
-    # Class 1 is object/foreground
+
     bg_mask = 1.0 - mask
-    
-    # Combine to create class indices (0=bg, 1=fg)
-    # class_mask = mask.clone()
-    
-    # return class_mask.squeeze()
+
     return torch.tensor(mask.squeeze())
 
 def generate_masks(config, method='gradcam', classifier_path=None, output_dir=None,
@@ -103,7 +97,7 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
         classifier = create_classifier(config)
         classifier.load_state_dict(torch.load(classifier_path, map_location=device))
         classifier = classifier.to(device)
-        cam_model = GradCAM(classifier)
+        cam_model = GradCAMForMask(classifier)
 
     elif method == 'cam':
         raise NotImplementedError("CAM method is not implemented yet.")
@@ -120,42 +114,25 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
     
     # Generate masks for all images
     for image, label, fname in tqdm(train_loader, desc=f"Generating masks with {method}"):
-        # Move to device
-        images = images.to(device)
-        targets = targets.to(device)
-        
-        # Generate mask
-        mask = generate_mask_for_image(
-            cam_model=cam_model,
-            image=images,
-            target_class=targets,
-            threshold=threshold
-        )
-        
-        # Save mask as PNG
-        img_path = Path(paths[0])
-        img_name = img_path.stem
-        mask_path = masks_dir / f"{img_name}.png"
-        
-        # Convert to PIL and save
-        mask_img = Image.fromarray((mask.cpu() * 255).to(torch.uint8).numpy(), mode='L')
-        mask_img.save(mask_path)
-        
-        # Create visualization if requested
-        if visualize:
-            # Get CAM for visualization
-            if isinstance(cam_model, GradCAM):
-                cam = cam_model.generate_cam(images, targets)
-            else:  # CCAM
-                cam = cam_model.get_cam(images, targets)
-            
-            # # Create visualization
-            # vis_img = visualize_cam(
-            #     images[0].cpu(),
-            #     cam[0].cpu(),
-            #     mask.cpu(),
-            #     save_path=vis_dir / f"{img_name}_cam.png"
-            # )
+        mask_name = fname[0].split(".")[0] + ".png"
+        mask_path = masks_dir / f"{mask_name}"
+
+        try:
+            # Generate CAM and mask
+            cam, binary_mask = cam_model.generate_mask(
+                image.to(device),
+                target_class=label,
+                orig_size=(224, 224),  # or actual image size if needed
+                threshold=0.4
+            )
+
+            # Save binary mask
+            cam_model.save_mask(binary_mask, mask_path)
+
+        except Exception as e:
+            print(f"Error processing {fname}: {e}")
+            continue
+
     
     logger.info(f"Generated {method} masks for all images. Saved to {masks_dir}")
     
