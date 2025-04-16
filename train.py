@@ -20,20 +20,6 @@ from utils.metrics import calculate_metrics
 
 logger = logging.getLogger(__name__)
 
-def setup_logging(log_path):
-    """Set up logging configuration"""
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_path),
-            logging.StreamHandler()
-        ],
-        force=True
-    )
-
 def setup_device(seed):
     """Setup device and seeds"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -117,12 +103,6 @@ def train_classifier(config, experiment, output_dir=None):
                 images = imgs.to(device)
                 labels = labels.to(device)
                 
-                # Debugging info (first batch only)
-                if batch_idx == 0 and epoch == 0:
-                    logger.info(f"Batch shape: {images.shape}")
-                    logger.info(f"Labels shape: {labels.shape}")
-                    logger.info(f"Label values: {labels}")
-                
                 optimizer.zero_grad()
                 try:
                     outputs = model(images)
@@ -193,140 +173,6 @@ def train_classifier(config, experiment, output_dir=None):
         logger.error(f"Error in train_classifier: {str(e)}")
         raise
 
-def train_cam(config_path, method='ccam', backbone='resnet18', num_epochs=None, output_dir=None):
-    """Train a CAM model (Note: GradCAM doesn't require training)"""
-    # Early return for GradCAM
-    if method != 'ccam':
-        logger.info("GradCAM doesn't require training as it uses a trained classifier")
-        return None
-
-    # Load config and setup
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
-    num_epochs = num_epochs or config['training']['epochs']['cam']
-    # Fix path construction
-    output_dir = Path(output_dir) if output_dir else Path(config['paths']['outputs']) / "cam" / method
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Setup logging and device
-    setup_logging(str(output_dir / "training.log"))
-    device = setup_device(config['training']['seed'])
-    
-    try:
-        # Initialize model and training components
-        model = create_cam_model(config_path, method, backbone)
-        if model is None:
-            raise ValueError(f"Failed to create CAM model with method: {method}")
-        model = model.to(device)
-        
-        train_loader, val_loader = create_dataloaders(
-            config=config,
-            split='train',
-            batch_size=config['training']['batch_size']
-        )
-        
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(
-            model.parameters(), 
-            lr=config['training']['lr']['cam'],
-            weight_decay=config.get('training', {}).get('weight_decay', 0.0001)
-        )
-        scheduler = ReduceLROnPlateau(
-            optimizer, 
-            mode='max', 
-            factor=0.1, 
-            patience=5, 
-            verbose=True
-        )
-        
-        # Training loop
-        best_acc = 0.0
-        checkpoint_path = output_dir / f"{method}_{backbone}_best.pth"
-        
-        for epoch in range(num_epochs):
-            train_metrics = train_epoch(model, train_loader, criterion, optimizer, device)
-            val_metrics = validate_epoch(model, val_loader, criterion, device)
-            
-            scheduler.step(val_metrics['acc'])
-            
-            logger.info(f"Epoch {epoch+1}/{num_epochs} - "
-                      f"Train Loss: {train_metrics['loss']:.4f}, Train Acc: {train_metrics['acc']:.4f}, "
-                      f"Val Loss: {val_metrics['loss']:.4f}, Val Acc: {val_metrics['acc']:.4f}")
-            
-            if val_metrics['acc'] > best_acc:
-                best_acc = val_metrics['acc']
-                save_checkpoint(model, optimizer, epoch, val_metrics['acc'], 
-                              method, backbone, checkpoint_path)
-                
-        logger.info(f"Training completed. Best validation accuracy: {best_acc:.4f}")
-        return str(checkpoint_path)
-        
-    except Exception as e:
-        logger.error(f"Error in train_cam: {str(e)}")
-        raise
-
-def train_epoch(model, dataloader, criterion, optimizer, device):
-    """Run one training epoch"""
-    model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    for images, labels, _, _ in tqdm(dataloader, desc="Training"):
-        images, labels = images.to(device), labels.to(device)
-        
-        optimizer.zero_grad()
-        logits = model(images)
-        loss = criterion(logits, labels)
-        loss.backward()
-        optimizer.step()
-        
-        running_loss += loss.item() * images.size(0)
-        _, predicted = torch.max(logits, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
-    
-    return {
-        'loss': running_loss / total if total > 0 else float('inf'),
-        'acc': correct / total if total > 0 else 0
-    }
-
-def validate_epoch(model, dataloader, criterion, device):
-    """Run one validation epoch"""
-    model.eval()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    with torch.no_grad():
-        for images, labels, _, _ in tqdm(dataloader, desc="Validation"):
-            images, labels = images.to(device), labels.to(device)
-            
-            logits = model(images)
-            loss = criterion(logits, labels)
-            
-            running_loss += loss.item() * images.size(0)
-            _, predicted = torch.max(logits, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-    
-    return {
-        'loss': running_loss / total if total > 0 else float('inf'),
-        'acc': correct / total if total > 0 else 0
-    }
-
-def save_checkpoint(model, optimizer, epoch, acc, method, backbone, path):
-    """Save model checkpoint"""
-    torch.save({
-        'epoch': epoch + 1,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'val_acc': acc,
-        'method': method,
-        'backbone': backbone
-    }, path)
-    logger.info(f"Saved best model with val_acc: {acc:.4f}")
 
 def train_segmentation(config_path, supervision='full', pseudo_masks_dir=None, num_epochs=None, output_dir=None):
     """Train a segmentation model with specified supervision type"""

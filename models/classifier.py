@@ -53,10 +53,36 @@ class ResNetClassifier(nn.Module):
             self._load_simclr_weights()
         elif self.initialization == 'random':
             self.model.apply(self._init_weights)
+        elif self.initialization == 'mocov2':
+            self._load_moco_weights()
         elif self.initialization == 'imagenet':
             pass  # Already loaded in _create_backbone
         else:
             raise ValueError(f"Unsupported initialization: {self.initialization}")
+    
+    def _load_moco_weights(self):
+        moco_path = Path(f"pretrained/mocov2_{self.backbone_name}.pth")
+        if not moco_path.exists():
+            logger.warning(f"MoCo v2 weights not found at {moco_path}. Using random init.")
+            self.model.apply(self._init_weights)
+            return
+
+        state_dict = torch.load(moco_path, map_location="cpu")["state_dict"]
+
+        # Strip "module.encoder_q." prefix (typical in MoCo)
+        cleaned_dict = {
+            k.replace("module.encoder_q.", ""): v
+            for k, v in state_dict.items()
+            if k.startswith("module.encoder_q") and "fc" not in k
+        }
+
+        missing, unexpected = self.model.load_state_dict(cleaned_dict, strict=False)
+        logger.info(f"Loaded MoCo v2 weights for {self.backbone_name}")
+        if missing:
+            logger.warning(f"Missing keys: {missing}")
+        if unexpected:
+            logger.warning(f"Unexpected keys: {unexpected}")
+
         
     def _load_simclr_weights(self):
         simclr_path = Path(f"pretrained/simclr_{self.backbone_name}.pth")
