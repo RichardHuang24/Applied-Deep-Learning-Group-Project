@@ -16,12 +16,12 @@ def main():
 
     # --- Download-only Subcommand
     parser_download = subparsers.add_parser("download", parents=[common_parser], help="Download dataset and exit")
-    parser_download.add_argument("--config-path", required=True)
+    parser_download.add_argument("--config_path", required=True)
     parser_download.set_defaults(func=handle_download)
 
     # --- Train Classifier
     parser_classifier = subparsers.add_parser("train_classifier", parents=[common_parser], help="Train image classifier")
-    parser_classifier.add_argument("--config-path", required=True)
+    parser_classifier.add_argument("--config_path", required=True)
     parser_classifier.add_argument("--backbone", required=True)
     parser_classifier.add_argument("--init", required=True)
     parser_classifier.add_argument("--experiment-name", default=None)
@@ -29,21 +29,21 @@ def main():
 
     # --- Generate Masks
     parser_masks = subparsers.add_parser("generate_masks", parents=[common_parser], help="Generate CAM-based pseudo masks")
-    parser_masks.add_argument("--config-path", required=True)
+    parser_masks.add_argument("--config_path", required=True)
     parser_masks.add_argument("--cam", required=True, choices=["gradcam", "cam"])
-    parser_masks.add_argument("--model-path", required=True)
+    parser_masks.add_argument("--model_path", required=True)
     parser_masks.add_argument("--backbone", required=True)
     parser_masks.add_argument("--init", required=True)
-    parser_masks.add_argument("--experiment-name", required=True)
+    parser_masks.add_argument("--experiment_name", required=True)
     parser_masks.set_defaults(func=handle_generate_masks)
 
     # --- Train + Generate
     parser_combo = subparsers.add_parser("train_and_generate", parents=[common_parser], help="Train classifier and generate masks")
     parser_combo.add_argument("--backbone", required=True)
     parser_combo.add_argument("--init", required=True)
-    parser_combo.add_argument("--config-path", required=True)
+    parser_combo.add_argument("--config_path", required=True)
     parser_combo.add_argument("--cam", required=True, choices=["gradcam", "cam"])
-    parser_combo.add_argument("--experiment-name", default=None)
+    parser_combo.add_argument("--experiment_name", default=None)
     parser_combo.set_defaults(func=train_and_generate_masks)
 
     # --- Run All

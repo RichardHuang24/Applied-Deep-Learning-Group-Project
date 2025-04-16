@@ -60,7 +60,7 @@ This framework is configured to work with **Oxford-IIIT Pet Dataset**.
 Download the dataset with:
 
 ```bash
-python main.py --download-only
+python main.py --download-only --config_path config.json
 ```
 
 This will download the dataset to the location specified in your config file.
@@ -74,18 +74,10 @@ This will download the dataset to the location specified in your config file.
 To run a single experiment with default settings:
 
 ```bash
-python main.py
+python main.py train_and_generate --config_path config.json --backbone resnet50 --init random --cam gradcam
 ```
 
 ---
-
-### Customizing Experiments
-
-Customize experiments with the following options:
-
-```bash
-python main.py --config-path config.json train_and_generate --backbone resnet50 --init random --cam gradcam
-```
 
 #### ✅ Available Options
 
