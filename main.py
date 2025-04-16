@@ -65,7 +65,8 @@ def main():
     parser_series.add_argument("--init", required=True)
     parser_series.add_argument("--cam", required=True, choices=["gradcam", "cam"])
     parser_series.add_argument("--experiment_name", default=None)
-    parser_series.add_argument("--visualize", action="store_true", help="Visualize results")
+    parser_series.add_argument("--supervision", required=True)
+    parser_series.add_argument("--config_path", required=True)
     parser_series.set_defaults(func=handle_train_series)
 
     # --- Run All
@@ -73,7 +74,9 @@ def main():
     parser_all.add_argument("--backbone", required=True)
     parser_all.add_argument("--init", required=True)
     parser_all.add_argument("--cam", required=True, choices=["gradcam", "cam"])
-    parser_all.set_defaults(func=handle_run_all)
+    parser_all.add_argument("--config_path", required=True)
+    parser_all.add_argument("--experiment_name", default=None)
+    parser_all.set_defaults(func=handle_train_series)
 
     # Parse and execute
     args = parser.parse_args()
@@ -93,6 +96,10 @@ def handle_train_series(args):
     # Step 2: Generate masks
     mask_dir = handle_generate_masks(args, model_path)
     # Step 3: train segmentation
+    segmentation_model_path = handle_train_segmentation(
+            args=args,
+            mask_dir=mask_dir
+        )
 
 
 

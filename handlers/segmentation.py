@@ -27,7 +27,7 @@ def handle_train_segmentation(args, mask_dir=None):
     mask_dir = args.pseudo_masks_dir if mask_dir is None else mask_dir
 
     # Define output directory based on experiment name
-    output_dir = Path(config['paths']['outputs']) / "segmentation" / experiment_name
+    output_dir = Path(config['paths']['outputs']) / "experiments" / experiment_name / "segmentation"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     setup_logging(output_dir)

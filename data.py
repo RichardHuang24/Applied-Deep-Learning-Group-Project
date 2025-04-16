@@ -77,7 +77,7 @@ def get_trimap_transform():
     ])
 
 class OxfordPetDataset(Dataset):
-    def __init__(self, root="dataset", root1="WSOL", split="trainval", transform=None,
+    def __init__(self, root="dataset", split="trainval", transform=None,
                  return_bbox=False, label_type="breed",
                  return_trimaps=False, transform_trimaps=None,
                  return_pseudomask=False, transform_pseudomasks=None, mask_dir=None):

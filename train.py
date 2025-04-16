@@ -187,8 +187,9 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
     device = setup_device(config['training']['seed'])
     if supervision == 'full':
         return_trimaps = True
+        return_pseudomask = False
     elif supervision.startswith('weak'):
-        return_trimaps = False
+        return_trimaps = True
         return_pseudomask = True
     else:
         return_trimaps = False
@@ -281,8 +282,14 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
         # Handle auxiliary loss if present
         if isinstance(outputs, tuple):
             outputs, aux_outputs = outputs
+            if masks.dim() == 4 and masks.size(1) == 1:
+                masks = masks.squeeze(1)
+            masks = masks.long()
             loss = criterion(outputs, masks) + 0.4 * criterion(aux_outputs, masks)
         else:
+            if masks.dim() == 4 and masks.size(1) == 1:
+                masks = masks.squeeze(1)
+            masks = masks.long()
             loss = criterion(outputs, masks)
         
         loss.backward()
