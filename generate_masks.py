@@ -70,7 +70,7 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
 
 
     # Create dataloaders
-    all_dataloader = data.data_loaders(split='all', batch_size=1, shuffle=False)
+    all_dataloader = data.data_loaders(split='trainval', batch_size=1, shuffle=False)
     
     # Generate masks for all images
     for image, label, fname in tqdm(all_dataloader, desc=f"Generating masks with {method}"):

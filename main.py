@@ -106,7 +106,7 @@ def handle_train_series(args):
 def handle_download(args):
     dataset_dir = Path(args.config["dataset"]["root"])
     print(f"Downloading dataset to {dataset_dir}")
-    download_dataset(dataset_dir)
+    download_dataset(dataset_dir, seed=42)
     print("Download complete. Exiting.")
 
 def train_and_generate_masks(args):
