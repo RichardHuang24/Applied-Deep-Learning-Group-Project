@@ -39,7 +39,7 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
     else:
         output_dir = Path(output_dir)
     
-    masks_dir = output_dir / "masks"
+    masks_dir = output_dir
     masks_dir.mkdir(parents=True, exist_ok=True)
     
     if visualize:
