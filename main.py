@@ -7,41 +7,29 @@ import os
 from utils.download import download_dataset
 
 def main():
-    # First, early parser for shared/global options
-    initial_parser = argparse.ArgumentParser(add_help=False)
-    initial_parser.add_argument("--download", action="store_true")
-    initial_parser.add_argument("--download-only", action="store_true")
-    initial_parser.add_argument("--config-path", required=True)
+    # Common parser for all subcommands
+    common_parser = argparse.ArgumentParser(add_help=False)
 
-    # Parse early args without triggering subcommand validation
-    early_args, _ = initial_parser.parse_known_args()
+    # Main CLI parser
+    parser = argparse.ArgumentParser(description="WSSS CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Load config early for download
-    with open(early_args.config_path, 'r') as f:
-        config = json.load(f)
+    # --- Download-only Subcommand
+    parser_download = subparsers.add_parser("download", parents=[common_parser], help="Download dataset and exit")
+    parser_download.add_argument("--config-path", required=True)
+    parser_download.set_defaults(func=handle_download)
 
-    # Handle dataset download early
-    if early_args.download or early_args.download_only:
-        dataset_dir = Path(config['dataset']['root'])
-        print(f"Downloading dataset to {dataset_dir}")
-        download_dataset(dataset_dir)
-
-        if early_args.download_only:
-            print("Dataset download complete. Exiting without running experiments.")
-            return
-
-    # Full parser with subcommands
-    parser = argparse.ArgumentParser(description="WSSS CLI", parents=[initial_parser])
-    subparsers = parser.add_subparsers(dest="command")
-
-    # Subcommands
-    parser_classifier = subparsers.add_parser("train_classifier", help="Train image classifier")
+    # --- Train Classifier
+    parser_classifier = subparsers.add_parser("train_classifier", parents=[common_parser], help="Train image classifier")
+    parser_classifier.add_argument("--config-path", required=True)
     parser_classifier.add_argument("--backbone", required=True)
     parser_classifier.add_argument("--init", required=True)
     parser_classifier.add_argument("--experiment-name", default=None)
     parser_classifier.set_defaults(func=handle_train_classifier)
 
-    parser_masks = subparsers.add_parser("generate_masks", help="Generate CAM-based pseudo masks")
+    # --- Generate Masks
+    parser_masks = subparsers.add_parser("generate_masks", parents=[common_parser], help="Generate CAM-based pseudo masks")
+    parser_masks.add_argument("--config-path", required=True)
     parser_masks.add_argument("--cam", required=True, choices=["gradcam", "cam"])
     parser_masks.add_argument("--model-path", required=True)
     parser_masks.add_argument("--backbone", required=True)
@@ -49,30 +37,34 @@ def main():
     parser_masks.add_argument("--experiment-name", required=True)
     parser_masks.set_defaults(func=handle_generate_masks)
 
-    parser_combo = subparsers.add_parser("train_and_generate", help="Train classifier and generate masks")
+    # --- Train + Generate
+    parser_combo = subparsers.add_parser("train_and_generate", parents=[common_parser], help="Train classifier and generate masks")
     parser_combo.add_argument("--backbone", required=True)
     parser_combo.add_argument("--init", required=True)
+    parser_combo.add_argument("--config-path", required=True)
     parser_combo.add_argument("--cam", required=True, choices=["gradcam", "cam"])
     parser_combo.add_argument("--experiment-name", default=None)
     parser_combo.set_defaults(func=train_and_generate_masks)
 
-    parser_all = subparsers.add_parser("run_all", help="Run the full WSSS pipeline")
+    # --- Run All
+    parser_all = subparsers.add_parser("run_all", parents=[common_parser], help="Run the full WSSS pipeline")
     parser_all.add_argument("--backbone", required=True)
     parser_all.add_argument("--init", required=True)
     parser_all.add_argument("--cam", required=True, choices=["gradcam", "cam"])
     parser_all.set_defaults(func=handle_run_all)
 
-    # Parse full args
+    # Parse and execute
     args = parser.parse_args()
+    with open(args.config_path, 'r') as f:
+        args.config = json.load(f)
+    
+    args.func(args)
 
-    # Inject shared config into args
-    args.config = config
-
-    if hasattr(args, 'func'):
-        args.func(args)
-    else:
-        parser.print_help()
-
+def handle_download(args):
+    dataset_dir = Path(args.config["dataset"]["root"])
+    print(f"Downloading dataset to {dataset_dir}")
+    download_dataset(dataset_dir)
+    print("Download complete. Exiting.")
 
 def train_and_generate_masks(args):
     """
