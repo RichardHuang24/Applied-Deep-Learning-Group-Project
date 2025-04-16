@@ -206,7 +206,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
         weight_decay = training_config.get('weight_decay', 0.0001)
         
         # Initialize model and data
-        model = create_segmentation_model(backbone).to(device)
+        model = create_segmentation_model(backbone=backbone).to(device)
 
         train_loader = data.data_loaders(
             split='train',
@@ -231,7 +231,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
             lr=learning_rate,
             weight_decay=weight_decay
         )
-        scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=5, verbose=True)
+        scheduler = scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
         
         # Training loop
         best_miou = 0.0
@@ -334,7 +334,12 @@ def validate_segmentation_epoch(model, dataloader, criterion, device, config):
             if isinstance(outputs, tuple):
                 outputs = outputs[0]
             
+            if masks.dim() == 4 and masks.size(1) == 1:
+                masks = masks.squeeze(1)
+
+            masks = masks.long()
             loss = criterion(outputs, masks)
+
             
             # Calculate metrics
             batch_size = images.size(0)

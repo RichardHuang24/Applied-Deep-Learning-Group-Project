@@ -101,11 +101,11 @@ class OxfordPetDataset(Dataset):
             self.transform = get_train_transform() if split == "train" else get_val_transform()
         
         if self.return_trimaps and self.transform_trimaps is None:
-            self.transform_trimaps = get_trimap_transform() if split == "train" else get_val_transform()
+            self.transform_trimaps = get_trimap_transform()
         if self.return_pseudomask and self.transform_pseudomasks is None:
             if self.pseudomask_dir is None:
                 raise ValueError("Pseudomask directory is not provided.")
-            self.transform_pseudomasks = get_trimap_transform() if split == "train" else get_val_transform()
+            self.transform_pseudomasks = get_trimap_transform()
             
         # Load annotation list
         list_path = os.path.join(self.annotation_dir, f"{split}.txt") if split != "all" else os.path.join(self.annotation_dir, "list.txt")

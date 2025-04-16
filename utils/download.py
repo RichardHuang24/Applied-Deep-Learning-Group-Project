@@ -8,6 +8,8 @@ import logging
 from pathlib import Path
 from tqdm import tqdm
 import random
+from utils.logging import setup_logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +125,10 @@ def download_dataset(dataset_dir, force_download=False, seed=42):
     """Download and prepare the Oxford-IIIT Pet Dataset"""
     dataset_dir = Path(dataset_dir)
     os.makedirs(dataset_dir, exist_ok=True)
+
+    # Setup logging
+    log_dir = 'output' / "downloads"
+    setup_logging(log_dir, log_name="download.log")
 
     logger.info(f"Preparing Oxford-IIIT Pet Dataset in {dataset_dir}")
 
