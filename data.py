@@ -100,9 +100,9 @@ class OxfordPetDataset(Dataset):
             self.transform = get_train_transform() if split == "train" else get_val_transform()
         
         if self.return_trimaps and self.transform_trimaps is None:
-            self.transform_trimaps = get_trimap_transform()
+            self.transform_trimaps = get_trimap_transform() if split == "train" else get_val_transform()
         if self.return_pseudomask and self.transform_pseudomasks is None:
-            self.transform_pseudomasks = get_trimap_transform()
+            self.transform_pseudomasks = get_trimap_transform() if split == "train" else get_val_transform()
             
         # Load annotation list
         list_path = os.path.join(self.annotation_dir, f"{split}.txt") if split != "all" else os.path.join(self.annotation_dir, "list.txt")
@@ -110,7 +110,6 @@ class OxfordPetDataset(Dataset):
         if not os.path.exists(list_path):
             raise FileNotFoundError(f"Annotation file not found: {list_path}")
 
-        # Determine format: 2-column (train/val) or 4-column (list/test)
         with open(list_path, "r") as f:
             lines = f.readlines()
 
