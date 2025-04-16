@@ -117,7 +117,7 @@ def train_classifier(config, experiment, output_dir=None):
             logger.info(f"Epoch {epoch+1}/{num_epochs}")
             
             # Training step
-            for batch_idx, (imgs, labels) in enumerate(tqdm(train_loader, desc="Training Classifier")):
+            for batch_idx, (imgs, labels, _) in enumerate(tqdm(train_loader, desc="Training Classifier")):
                 # Extract data
                 images = imgs.to(device)
                 labels = labels.to(device)

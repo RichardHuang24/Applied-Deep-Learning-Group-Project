@@ -114,11 +114,12 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
     # Create dataloaders
     train_loader, _ = create_dataloaders(
         config=config,
+        supervision="generate_masks",
         batch_size=1  # Process one image at a time
     )
     
     # Generate masks for all images
-    for images, targets, paths, orig_images in tqdm(train_loader, desc=f"Generating masks with {method}"):
+    for image, label, fname in tqdm(train_loader, desc=f"Generating masks with {method}"):
         # Move to device
         images = images.to(device)
         targets = targets.to(device)

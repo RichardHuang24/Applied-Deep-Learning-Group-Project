@@ -374,7 +374,7 @@ class ClassificationDataset(Dataset):
             img = Image.new('RGB', (224, 224))  # fallback blank image
 
         img = self.transform(img)
-        return img, label
+        return img, label, fname
 
 class SegmentationDataset(Dataset):
     """Dataset for semantic segmentation"""
@@ -431,8 +431,8 @@ class SegmentationDataset(Dataset):
         if os.path.exists(mask_path):
             mask = Image.open(mask_path)
         else:
-            # If mask doesn't exist, create a blank mask
-            mask = Image.new('L', img.size, 0)
+            # If mask doesn't exist, raise error
+            raise FileNotFoundError(f"Mask file not found: {mask_path}")
         
         # Apply image transform first
         if self.transform:
