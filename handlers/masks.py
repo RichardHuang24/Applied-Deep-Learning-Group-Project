@@ -40,3 +40,5 @@ def handle_generate_masks(args, model_path=None):
     )
 
     logger.info(f"Masks saved to: {masks_dir}")
+
+    return masks_dir

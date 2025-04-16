@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True, return_bbox=False,
                   return_trimaps=False, return_pseudomask=False,
                   label_type="breed", transform=None, transform_trimaps=None,
-                  transform_pseudomasks=None):
+                  transform_pseudomasks=None, mask_dir=None):
     """
     Create data loaders for the dataset
 
@@ -38,6 +38,7 @@ def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True, retu
                                return_pseudomask=return_pseudomask,
                                transform_trimaps=transform_trimaps,
                                transform_pseudomasks=transform_pseudomasks,
+                               mask_dir=mask_dir,
                                label_type=label_type)
     print(f"Loaded {len(dataset)} samples for split={split}")
 
@@ -79,12 +80,12 @@ class OxfordPetDataset(Dataset):
     def __init__(self, root="dataset", root1="WSOL", split="trainval", transform=None,
                  return_bbox=False, label_type="breed",
                  return_trimaps=False, transform_trimaps=None,
-                 return_pseudomask=False, transform_pseudomasks=None):
+                 return_pseudomask=False, transform_pseudomasks=None, mask_dir=None):
         self.root = root
         self.image_dir = os.path.join(root, "images")
         self.annotation_dir = os.path.join(root, "annotations")
         self.trimaps_dir = os.path.join(self.annotation_dir, "trimaps")
-        # self.pseudomask_dir = os.path.join(root1, "pseudo_masks")
+        self.pseudomask_dir = mask_dir
         self.xml_dir = os.path.join(self.annotation_dir, "xmls")
 
         self.transform = transform
@@ -102,6 +103,8 @@ class OxfordPetDataset(Dataset):
         if self.return_trimaps and self.transform_trimaps is None:
             self.transform_trimaps = get_trimap_transform() if split == "train" else get_val_transform()
         if self.return_pseudomask and self.transform_pseudomasks is None:
+            if self.pseudomask_dir is None:
+                raise ValueError("Pseudomask directory is not provided.")
             self.transform_pseudomasks = get_trimap_transform() if split == "train" else get_val_transform()
             
         # Load annotation list

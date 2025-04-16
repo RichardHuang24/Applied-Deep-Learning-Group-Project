@@ -1,6 +1,7 @@
 import argparse
 from handlers.classifier import handle_train_classifier
 from handlers.masks import handle_generate_masks
+from handlers.segmentation import handle_train_segmentation
 import json
 from pathlib import Path
 import os
@@ -47,6 +48,26 @@ def main():
     parser_combo.add_argument("--experiment_name", default=None)
     parser_combo.set_defaults(func=train_and_generate_masks)
 
+    # --- Train Segmentation
+    parser_segmentation = subparsers.add_parser("train_segmentation", parents=[common_parser], help="Train segmentation model")
+    parser_segmentation.add_argument("--config_path", required=True)
+    parser_segmentation.add_argument("--supervision", required=True)
+    parser_segmentation.add_argument("--pseudo_masks_dir", default=None)
+    parser_segmentation.add_argument("--experiment_name", default=None)
+    parser_segmentation.add_argument("--init", default=None)
+    parser_segmentation.add_argument("--cam", required=True, choices=["gradcam", "cam"])
+    parser_segmentation.add_argument("--backbone", required=True)
+    parser_segmentation.set_defaults(func=handle_train_segmentation)
+
+    # --- Run in series
+    parser_series = subparsers.add_parser("run_series", parents=[common_parser], help="Run the full WSSS pipeline in series")
+    parser_series.add_argument("--backbone", required=True)
+    parser_series.add_argument("--init", required=True)
+    parser_series.add_argument("--cam", required=True, choices=["gradcam", "cam"])
+    parser_series.add_argument("--experiment_name", default=None)
+    parser_series.add_argument("--visualize", action="store_true", help="Visualize results")
+    parser_series.set_defaults(func=handle_train_series)
+
     # --- Run All
     parser_all = subparsers.add_parser("run_all", parents=[common_parser], help="Run the full WSSS pipeline")
     parser_all.add_argument("--backbone", required=True)
@@ -60,6 +81,20 @@ def main():
         args.config = json.load(f)
     
     args.func(args)
+
+def handle_train_series(args):
+    """
+    Trains the classifier and generates masks using the trained model.
+    """
+    # Step 1: Train classifier
+    model_path, exp_name = handle_train_classifier(args)
+    args.experiment_name = exp_name  # Inject for generate step
+
+    # Step 2: Generate masks
+    mask_dir = handle_generate_masks(args, model_path)
+    # Step 3: train segmentation
+
+
 
 def handle_download(args):
     dataset_dir = Path(args.config["dataset"]["root"])
@@ -76,7 +111,7 @@ def train_and_generate_masks(args):
     args.experiment_name = exp_name  # Inject for generate step
 
     # Step 2: Generate masks
-    handle_generate_masks(args, model_path)
+    _ = handle_generate_masks(args, model_path)
 
 # Optional: Series runner
 def handle_run_all(args):

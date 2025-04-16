@@ -174,57 +174,67 @@ def train_classifier(config, experiment, output_dir=None):
         raise
 
 
-def train_segmentation(config_path, supervision='full', pseudo_masks_dir=None, num_epochs=None, output_dir=None):
+def train_segmentation(config, supervision='full', experiment_name=None, pseudo_masks_dir=None, num_epochs=None, output_dir=None):
     """Train a segmentation model with specified supervision type"""
-    # Load config and setup paths
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
-    # Logging info
-    logger.info(f"Training segmentation model with supervision: {supervision}")
 
-    model_name = next((exp['name'] for exp in config['experiments']['segmentation'] 
-                      if exp['supervision'] == supervision), supervision)
+    logger = logging.getLogger("Train Segmentation")
+    logger.info(f"Training segmentation model with supervision: {supervision}")
     
-    output_dir = Path(output_dir) if output_dir else Path(config['paths']['outputs']) / "segmentation" / model_name
+    output_dir = Path(output_dir) if output_dir else Path(config['paths']['outputs']) / "segmentation" / experiment_name
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Setup logging and device
-    setup_logging(str(output_dir / "training.log"))
     device = setup_device(config['training']['seed'])
+    if supervision == 'full':
+        return_trimaps = True
+    elif supervision.startswith('weak'):
+        return_trimaps = False
+        return_pseudomask = True
+    else:
+        return_trimaps = False
+        return_pseudomask = False
+    logger.info(f"Return trimaps: {return_trimaps}, Return pseudomask: {return_pseudomask}")
     
     try:
         # Setup training components
         num_epochs = num_epochs or config['training']['epochs']['pspnet']
-        pseudo_masks_dir = get_masks_dir(supervision, pseudo_masks_dir, config)
         backbone = config['models']['pspnet']['backbone']
+        training_config = config.get('training', {})
+        batch_size = training_config.get('batch_size', 32)
+        learning_rate = training_config.get('learning_rate', 0.001)
+        weight_decay = training_config.get('weight_decay', 0.0001)
         
         # Initialize model and data
-        model = create_segmentation_model(config_path, backbone).to(device)
-        train_loader, val_loader = create_dataloaders(
-            config=config,
-            split='train',
-            batch_size=config['training']['batch_size'],
-            supervision=supervision,
-            pseudo_masks_dir=pseudo_masks_dir
-        )
+        model = create_segmentation_model(backbone).to(device)
+
         train_loader = data.data_loaders(
             split='train',
-            batch_size=config['training']['batch_size'],
-            return_pseudomask=True,
+            batch_size=batch_size,
+            return_pseudomask=return_pseudomask,
+            return_trimaps=return_trimaps,
+            mask_dir=pseudo_masks_dir
+        )
+
+        val_loader = data.data_loaders(
+            split='val',
+            batch_size=batch_size,
+            return_pseudomask=return_pseudomask,
+            return_trimaps=return_trimaps,
+            mask_dir=pseudo_masks_dir
+        )
         
         # Setup training tools
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(
             model.parameters(),
-            lr=config['training']['lr']['pspnet'],
-            weight_decay=config.get('training', {}).get('weight_decay', 0.0001)
+            lr=learning_rate,
+            weight_decay=weight_decay
         )
         scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=5, verbose=True)
         
         # Training loop
         best_miou = 0.0
-        checkpoint_path = output_dir / f"{model_name}_best.pth"
+        checkpoint_path = output_dir / f"{experiment_name}_best.pth"
         
         for epoch in range(num_epochs):
             train_metrics = train_segmentation_epoch(model, train_loader, criterion, optimizer, device, config)
@@ -259,15 +269,9 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
     running_pixel_acc = 0.0
     running_miou = 0.0
     total_samples = 0
-    # num_classes = config['dataset']['num_classes'] + 1  # Add 1 for background
     num_classes = 2
     
     for images, masks, _, _ in tqdm(dataloader, desc="Training"):
-        # # Size
-        # print(f"Image size: {images.size()}")
-        # print(f"Mask size: {masks.size()}")
-        # # # Logging
-        # # logger.info(f"Image shape: {images.shape}, Mask shape: {masks.shape}")
 
         images, masks = images.to(device), masks.to(device)
         
@@ -276,11 +280,6 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
         
         # Handle auxiliary loss if present
         if isinstance(outputs, tuple):
-            # # Size
-            # print(f"Output size: {outputs[0].size()}")
-            # # Logging
-            # logger.info(f"Output shape: {outputs[0].shape}, Aux output shape: {outputs[1].shape}")
-
             outputs, aux_outputs = outputs
             loss = criterion(outputs, masks) + 0.4 * criterion(aux_outputs, masks)
         else:
