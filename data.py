@@ -188,9 +188,9 @@ class OxfordPetDataset(Dataset):
 
         # Return depending on supervision mode
         if self.return_pseudomask:
-            return image, pseudomask, trimap, label
+            return image, pseudomask, trimap
         elif self.return_trimaps:
-            return image, trimap, label
+            return image, trimap, filename
         else:
             return image, label, filename
 

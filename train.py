@@ -219,9 +219,9 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
         val_loader = data.data_loaders(
             split='val',
             batch_size=batch_size,
-            return_pseudomask=return_pseudomask,
+            return_pseudomask=False,
             return_trimaps=return_trimaps,
-            mask_dir=pseudo_masks_dir
+            shuffle=False
         )
         
         # Setup training tools
@@ -235,7 +235,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
         
         # Training loop
         best_miou = 0.0
-        checkpoint_path = output_dir / f"{experiment_name}_best.pth"
+        checkpoint_path = output_dir / "segmentation_best.pth"
         
         for epoch in range(num_epochs):
             train_metrics = train_segmentation_epoch(model, train_loader, criterion, optimizer, device, config)
@@ -246,8 +246,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
             
             if val_metrics['miou'] > best_miou:
                 best_miou = val_metrics['miou']
-                save_segmentation_checkpoint(model, optimizer, epoch, val_metrics, 
-                                          supervision, backbone, checkpoint_path)
+                torch.save(model.state_dict(), checkpoint_path)
         
         logger.info(f"Training completed. Best mIoU: {best_miou:.4f}")
         return str(checkpoint_path)
@@ -272,7 +271,7 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
     total_samples = 0
     num_classes = 2
     
-    for images, masks, _, _ in tqdm(dataloader, desc="Training"):
+    for images, masks, _ in tqdm(dataloader, desc="Training"):
 
         images, masks = images.to(device), masks.to(device)
         
@@ -325,7 +324,7 @@ def validate_segmentation_epoch(model, dataloader, criterion, device, config):
     num_classes = 2 # Always 2 classes (Foreground/Background) for segmentation validation
     
     with torch.no_grad():
-        for images, masks, _, _ in tqdm(dataloader, desc="Validation"):
+        for images, masks, _ in tqdm(dataloader, desc="Validation"):
             images, masks = images.to(device), masks.to(device)
             
             outputs = model(images)
@@ -372,16 +371,3 @@ def log_metrics(epoch, num_epochs, train_metrics, val_metrics):
         f"Val Acc: {val_metrics['pixel_acc']:.4f}, "
         f"Val mIoU: {val_metrics['miou']:.4f}"
     )
-
-def save_segmentation_checkpoint(model, optimizer, epoch, val_metrics, supervision, backbone, checkpoint_path):
-    """Save segmentation model checkpoint"""
-    torch.save({
-        'epoch': epoch + 1,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'val_miou': val_metrics['miou'],
-        'val_pixel_acc': val_metrics['pixel_acc'],
-        'supervision': supervision,
-        'backbone': backbone
-    }, checkpoint_path)
-    logger.info(f"Saved best model with val_miou: {val_metrics['miou']:.4f}")

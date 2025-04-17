@@ -2,6 +2,7 @@ import argparse
 from handlers.classifier import handle_train_classifier
 from handlers.masks import handle_generate_masks
 from handlers.segmentation import handle_train_segmentation
+from handlers.evaluate import handle_evaluate
 import json
 from pathlib import Path
 import os
@@ -52,7 +53,7 @@ def main():
     parser_segmentation = subparsers.add_parser("train_segmentation", parents=[common_parser], help="Train segmentation model")
     parser_segmentation.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_segmentation.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_gradcam")
-    parser_segmentation.add_argument("--pseudo_masks_dir", required=True, default=None, help="Directory containing pseudo masks")
+    parser_segmentation.add_argument("--pseudo_masks_dir", default=None, help="Directory containing pseudo masks")
     parser_segmentation.add_argument("--experiment_name", default=None)
     parser_segmentation.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
     parser_segmentation.add_argument("--cam", choices=["gradcam", "cam"], help="CAM method to use", default="gradcam")
@@ -68,6 +69,18 @@ def main():
     parser_series.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_gradcam")
     parser_series.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_series.set_defaults(func=handle_train_series)
+
+    # --- Evaluate
+    parser_eval = subparsers.add_parser("evaluate", parents=[common_parser], help="Evaluate segmentation model")
+    parser_eval.add_argument("--config_path", required=True, help="Path to config.json")
+    parser_eval.add_argument("--supervision", required=True, choices=["full", "weak_gradcam", "weak_cam"])
+    parser_eval.add_argument("--checkpoint",required=True, help="Path to model checkpoint")
+    parser_eval.add_argument("--visualize", action="store_false", help="Save visualization images")
+    parser_eval.add_argument("--experiment_name", default=None)
+    parser_eval.add_argument("--cam", choices=["gradcam", "cam"], help="CAM method to use", default="gradcam")
+    parser_eval.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
+    parser_eval.add_argument("--init", choices=["random", "imagenet"], help="Initialization method for the classifier", default="imagenet")
+    parser_eval.set_defaults(func=handle_evaluate)
 
     # --- Run All
     parser_all = subparsers.add_parser("run_all", parents=[common_parser], help="Run the full WSSS pipeline")

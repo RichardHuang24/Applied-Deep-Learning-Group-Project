@@ -12,7 +12,7 @@ def handle_generate_masks(args, model_path=None):
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         args.experiment_name = args.experiment_name or f"{args.backbone}_{args.init}_{args.cam}_{timestamp}"
     
-    output_dir = Path(config['paths']['outputs']) / "experiments" / args.experiment_name
+    output_dir = Path(config['paths']['outputs']) / "experiments" / args.experiment_name / "masks"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Setup logging (once per experiment ideally)
