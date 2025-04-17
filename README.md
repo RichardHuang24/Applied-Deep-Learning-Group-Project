@@ -64,7 +64,6 @@ python main.py download
 
 ```bash
 python main.py train_classifier \
-    --backbone resnet50 \
     --init imagenet \
     --cam gradcam 
 ```
@@ -75,9 +74,8 @@ python main.py train_classifier \
 
 ```bash
 python main.py generate_masks \
-    --cam gradcam \
-    --backbone resnet50 \
-    --init imagenet 
+    --init imagenet \
+    --cam gradcam 
 ```
 
 ---
@@ -87,10 +85,8 @@ python main.py generate_masks \
 ```bash
 python main.py train_segmentation \
     --supervision weak_gradcam \
-    --pseudo_masks_dir ./experiments/example_run/masks/ \
-    --cam gradcam \
-    --backbone resnet50 \
-    --init imagenet 
+    --init imagenet \
+    --cam gradcam 
 ```
 
 ---
@@ -100,8 +96,8 @@ python main.py train_segmentation \
 ```bash
 python main.py evaluate \
     --supervision weak_gradcam \
-    --cam gradcam \
-    --init imagenet 
+    --init imagenet \
+    --cam gradcam 
 ```
 
 ---
@@ -110,6 +106,7 @@ python main.py evaluate \
 
 ```bash
 python main.py train_and_generate \
+    --supervision weak_gradcam
     --init imagenet \
     --cam gradcam 
 ```
@@ -122,9 +119,9 @@ To run all experiment combinations with a specific configuration:
 
 ```bash
 python main.py run_all \
+    --supervision weak_gradcam \
     --init imagenet \
-    --cam gradcam \
-    --supervision weak_gradcam
+    --cam gradcam 
 ```
 
 ---
