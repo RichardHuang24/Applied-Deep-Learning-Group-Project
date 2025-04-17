@@ -43,7 +43,8 @@ def handle_train_segmentation(args, mask_dir=None):
             supervision=supervision,
             pseudo_masks_dir=mask_dir,
             experiment_name=experiment_name,
-            output_dir=output_dir  # Pass the specific output directory
+            output_dir=output_dir,  # Pass the specific output directory
+            init=args.init
         )
         logger.info(f"Segmentation model training complete. Model saved to: {segmentation_model_path}")
         return segmentation_model_path # Return path for potential chaining (e.g., in run_all)

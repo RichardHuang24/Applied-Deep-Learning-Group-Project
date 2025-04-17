@@ -19,15 +19,6 @@ from utils.metrics import calculate_metrics
 
 logger = logging.getLogger(__name__)
 
-def setup_device(seed):
-    """Setup device and seeds"""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-    logger.info(f"Using device: {device}")
-    return device
-
 def train_classifier(config, experiment, output_dir=None):
     """
     Train a classifier with the specified configuration
@@ -47,7 +38,7 @@ def train_classifier(config, experiment, output_dir=None):
     logger = logging.getLogger("Train Classifier")
     
     # Set up device, set seed
-    device = setup_device(config.get('training', {}).get('seed', 42))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
     
     # Extract training parameters from config
@@ -173,7 +164,7 @@ def train_classifier(config, experiment, output_dir=None):
         raise
 
 
-def train_segmentation(config, supervision='full', experiment_name=None, pseudo_masks_dir=None, num_epochs=None, output_dir=None):
+def train_segmentation(config, supervision='full', experiment_name=None, pseudo_masks_dir=None, num_epochs=None, output_dir=None, init='imagenet'):
     """Train a segmentation model with specified supervision type"""
 
     logger = logging.getLogger("Train Segmentation")
@@ -183,7 +174,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Setup logging and device
-    device = setup_device(config['training']['seed'])
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if supervision == 'full':
         return_trimaps = True
         return_pseudomask = False
@@ -205,7 +196,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
         weight_decay = training_config.get('weight_decay', 0.0001)
         
         # Initialize model and data
-        model = create_segmentation_model(backbone=backbone).to(device)
+        model = create_segmentation_model(backbone=backbone, init=init).to(device)
 
         train_loader = data.data_loaders(
             split='train',

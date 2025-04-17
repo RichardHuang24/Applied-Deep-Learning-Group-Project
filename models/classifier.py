@@ -8,6 +8,7 @@ import json
 import logging
 import torchvision.models as models
 from pathlib import Path
+import urllib.request
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class ResNetClassifier(nn.Module):
 
     def _initialize_weights(self):
         if self.initialization == 'simclr':
-            self._load_simclr_weights()
+            raise NotImplementedError("SimCLR initialization not implemented")
         elif self.initialization == 'random':
             self.model.apply(self._init_weights)
         elif self.initialization == 'mocov2':
@@ -61,21 +62,37 @@ class ResNetClassifier(nn.Module):
             raise ValueError(f"Unsupported initialization: {self.initialization}")
     
     def _load_moco_weights(self):
-        moco_path = Path(f"pretrained/mocov2_{self.backbone_name}.pth")
-        if not moco_path.exists():
-            logger.warning(f"MoCo v2 weights not found at {moco_path}. Using random init.")
-            self.model.apply(self._init_weights)
-            return
+        """
+        Load MoCo v2 pretrained weights (ResNet-50 only officially).
+        Automatically downloads if not found.
+        """
+        
+        # Checkpoint URL (MoCo v2 ResNet-50, 800 epochs)
+        url = "https://dl.fbaipublicfiles.com/moco/moco_v2_800ep_pretrain.pth.tar"
+        local_path = Path(f"pretrained/mocov2_{self.backbone_name}.pth")
 
-        state_dict = torch.load(moco_path, map_location="cpu")["state_dict"]
+        if not local_path.exists():
+            logger.info("Downloading MoCo v2 pretrained weights...")
 
-        # Strip "module.encoder_q." prefix (typical in MoCo)
+            # Direct download from official Facebook Research
+            url = "https://dl.fbaipublicfiles.com/moco/moco_checkpoints/moco_v2_800ep/moco_v2_800ep_pretrain.pth.tar"
+            urllib.request.urlretrieve(url, local_path)
+            logger.info(f"Downloaded MoCo v2 weights to {local_path}")
+
+        if self.backbone_name != "resnet50":
+            raise ValueError(f"No official MoCo v2 weights available for {self.backbone_name}. Using random init.")
+
+        # Load checkpoint
+        state_dict = torch.load(local_path, map_location="cpu")["state_dict"]
+
+        # Clean state dict: remove `module.encoder_q.` prefix
         cleaned_dict = {
             k.replace("module.encoder_q.", ""): v
             for k, v in state_dict.items()
             if k.startswith("module.encoder_q") and "fc" not in k
         }
 
+        # Load weights
         missing, unexpected = self.model.load_state_dict(cleaned_dict, strict=False)
         logger.info(f"Loaded MoCo v2 weights for {self.backbone_name}")
         if missing:
@@ -83,24 +100,6 @@ class ResNetClassifier(nn.Module):
         if unexpected:
             logger.warning(f"Unexpected keys: {unexpected}")
 
-        
-    def _load_simclr_weights(self):
-        simclr_path = Path(f"pretrained/simclr_{self.backbone_name}.pth")
-        if simclr_path.exists():
-            state_dict = torch.load(simclr_path, map_location='cpu')
-
-            # Remove projection head weights (if present)
-            encoder_dict = {k: v for k, v in state_dict.items() if not k.startswith('projection_head')}
-
-            missing, unexpected = self.model.load_state_dict(encoder_dict, strict=False)
-            logger.info(f"Loaded SimCLR weights for {self.backbone_name}")
-            if missing:
-                logger.warning(f"Missing keys: {missing}")
-            if unexpected:
-                logger.warning(f"Unexpected keys: {unexpected}")
-        else:
-            logger.warning(f"SimCLR weights not found at {simclr_path}. Using random initialization.")
-            self.model.apply(self._init_weights)
     
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv2d, nn.Linear)):

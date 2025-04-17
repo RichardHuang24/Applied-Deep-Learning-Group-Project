@@ -6,6 +6,9 @@ from handlers.evaluate import handle_evaluate
 import json
 from pathlib import Path
 import os
+import random
+import numpy as np
+import torch
 from utils.download import download_dataset
 
 def main():
@@ -99,6 +102,24 @@ def main():
         args.config = json.load(f)
     
     args.func(args)
+    # Set seed for reproducibility
+    set_seed(args.config["training"]["seed"])
+
+def set_seed(seed=42):
+    """
+    Set seed for reproducibility across Python, NumPy, and PyTorch
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False  # Turn off benchmark for exact reproducibility
+
+    print(f"[Seed Set] {seed}")
 
 def handle_train_series(args):
     """
@@ -148,11 +169,13 @@ def handle_run_all(args):
         # Step 2: Generate masks
         mask_dir = handle_generate_masks(args, model_path)
     mask_dir = None if args.supervision=='full' else mask_dir
+
     # Step 3: train segmentation
     segmentation_model_path = handle_train_segmentation(
         args=args,
         mask_dir=mask_dir
     )
+    
     # Step 4: Evaluate segmentation model
     args.checkpoint = segmentation_model_path
     handle_evaluate(

@@ -8,15 +8,13 @@ import torch.nn.functional as F
 import logging
 from torchvision.models import (
     resnet18, resnet34, resnet50,
-    ResNet18_Weights, ResNet34_Weights, ResNet50_Weights
-)
-
+    ResNet18_Weights, ResNet34_Weights, ResNet50_Weights)
+import urllib.request
+from pathlib import Path
 logger = logging.getLogger(__name__)
 
+
 class PSPModule(nn.Module):
-    """
-    Pyramid Scene Parsing Module
-    """
     def __init__(self, in_channels, out_channels, sizes=(1, 2, 3, 6)):
         super(PSPModule, self).__init__()
         self.stages = nn.ModuleList([
@@ -46,40 +44,38 @@ class PSPModule(nn.Module):
 
 
 class PSPNet(nn.Module):
-    """
-    PSPNet for semantic segmentation with configurable ResNet backbone
-    """
-    def __init__(self, num_classes=2, backbone='resnet50', pretrained=True):
+    def __init__(self, num_classes=2, backbone='resnet50', init='imagenet'):
         super(PSPNet, self).__init__()
+        self.backbone_name = backbone.lower()
+        self.init_type = init.lower()
 
-        # Backbone selection with weights handling
-        if backbone == 'resnet18':
-            weights = ResNet18_Weights.DEFAULT if pretrained else None
-            base_model = resnet18(weights=weights)
+        if self.backbone_name == 'resnet18':
+            base_model = resnet18(weights=ResNet18_Weights.DEFAULT if self.init_type == 'imagenet' else None)
             feature_channels = 512
-        elif backbone == 'resnet34':
-            weights = ResNet34_Weights.DEFAULT if pretrained else None
-            base_model = resnet34(weights=weights)
+        elif self.backbone_name == 'resnet34':
+            base_model = resnet34(weights=ResNet34_Weights.DEFAULT if self.init_type == 'imagenet' else None)
             feature_channels = 512
-        elif backbone == 'resnet50':
-            weights = ResNet50_Weights.DEFAULT if pretrained else None
-            base_model = resnet50(weights=weights)
+        elif self.backbone_name == 'resnet50':
+            base_model = resnet50(weights=ResNet50_Weights.DEFAULT if self.init_type == 'imagenet' else None)
             feature_channels = 2048
         else:
-            raise ValueError(f"Unsupported backbone: {backbone}")
+            raise ValueError(f"Unsupported backbone: {self.backbone_name}")
 
-        # Extract layers from backbone
+        if self.init_type == 'mocov2':
+            self._load_moco_weights(base_model)
+
+        elif self.init_type == 'random':
+            base_model.apply(self._init_weights)
+
         layers = list(base_model.children())
-        self.layer0 = nn.Sequential(*layers[:4])  # Conv1 + BN + ReLU + MaxPool
+        self.layer0 = nn.Sequential(*layers[:4])  # conv1, bn1, relu, maxpool
         self.layer1 = layers[4]
         self.layer2 = layers[5]
         self.layer3 = layers[6]
         self.layer4 = layers[7]
 
-        # PSP Module
         self.psp = PSPModule(in_channels=feature_channels, out_channels=512)
 
-        # Final classifier
         self.classifier = nn.Sequential(
             nn.Conv2d(512, 256, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -88,7 +84,6 @@ class PSPNet(nn.Module):
             nn.Conv2d(256, num_classes, kernel_size=1)
         )
 
-        # Auxiliary classifier for deep supervision
         self.aux_classifier = nn.Sequential(
             nn.Conv2d(feature_channels // 2, 256, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -97,6 +92,46 @@ class PSPNet(nn.Module):
             nn.Conv2d(256, num_classes, kernel_size=1)
         )
 
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.kaiming_normal_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def _load_moco_weights(self, model):
+        if self.backbone_name != 'resnet50':
+            raise ValueError("MoCo v2 weights are only available for ResNet-50 backbone.")
+
+        local_path = Path("pretrained/mocov2_resnet50.pth")
+
+        if not local_path.exists():
+            logger.info("Downloading MoCo v2 pretrained weights...")
+
+            # Direct download from official Facebook Research
+            url = "https://dl.fbaipublicfiles.com/moco/moco_checkpoints/moco_v2_800ep/moco_v2_800ep_pretrain.pth.tar"
+
+            urllib.request.urlretrieve(url, local_path)
+
+
+            logger.info(f"Downloaded MoCo v2 weights to {local_path}")
+
+        checkpoint = torch.load(local_path, map_location='cpu')
+        state_dict = checkpoint['state_dict']
+
+        # Clean keys
+        cleaned_dict = {
+            k.replace("module.encoder_q.", ""): v
+            for k, v in state_dict.items()
+            if k.startswith("module.encoder_q") and "fc" not in k
+        }
+
+        missing, unexpected = model.load_state_dict(cleaned_dict, strict=False)
+        logger.info("Loaded MoCo v2 weights.")
+        if missing:
+            logger.warning(f"Missing keys: {missing}")
+        if unexpected:
+            logger.warning(f"Unexpected keys: {unexpected}")
+
     def forward(self, x):
         input_size = (x.size(2), x.size(3))
 
@@ -104,7 +139,7 @@ class PSPNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        aux = x  # for auxiliary loss
+        aux = x
         x = self.layer4(x)
 
         x = self.psp(x)
@@ -119,7 +154,8 @@ class PSPNet(nn.Module):
         return x
 
 
-def create_segmentation_model(backbone='resnet50', pretrained=True, num_classes=2):
+
+def create_segmentation_model(backbone='resnet50', init='imagenet', num_classes=2):
     """
     Factory function to create a PSPNet model.
     
@@ -131,10 +167,9 @@ def create_segmentation_model(backbone='resnet50', pretrained=True, num_classes=
     Returns:
         PSPNet model
     """
-    # Optional: load num_classes from config if needed
 
     return PSPNet(
         num_classes=num_classes,
         backbone=backbone,
-        pretrained=pretrained
+        init=init
     )
