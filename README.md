@@ -24,7 +24,7 @@ This framework implements a full pipeline for Weakly-Supervised Semantic Segment
 - **Additional dependencies**:  
   - `torch`  
   - `tqdm`  
-  - `numpy`
+  - `Pillow`
 
 ---
 
