@@ -8,8 +8,6 @@
   "training": {
     "seed": 42,
     "epochs": {
-      "classifier": 50,
-      "cam": 50,
       "pspnet": 1
     },
     "batch_size": 32,

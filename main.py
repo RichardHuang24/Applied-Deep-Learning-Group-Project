@@ -89,6 +89,7 @@ def main():
     parser_all.add_argument("--cam", choices=["gradcam", "cam"], help="CAM method to use", default="gradcam")
     parser_all.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_all.add_argument("--experiment_name", default=None)
+    parser_all.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_gradcam")
     parser_all.set_defaults(func=handle_run_all)
 
     # Parse and execute
@@ -102,19 +103,19 @@ def handle_train_series(args):
     """
     Trains the classifier and generates masks using the trained model.
     """
-    # Step 1: Train classifier
-    model_path, exp_name = handle_train_classifier(args)
-    args.experiment_name = exp_name  # Inject for generate step
+    if args.supervision!='full':
+        # Step 1: Train classifier
+        model_path, exp_name = handle_train_classifier(args)
+        args.experiment_name = exp_name  # Inject for generate step
 
-    # Step 2: Generate masks
-    mask_dir = handle_generate_masks(args, model_path)
+        # Step 2: Generate masks
+        mask_dir = handle_generate_masks(args, model_path)
+
     # Step 3: train segmentation
     segmentation_model_path = handle_train_segmentation(
         args=args,
         mask_dir=mask_dir
     )
-
-
 
 def handle_download(args):
     dataset_dir = Path(args.config["dataset"]["root"])
@@ -138,12 +139,13 @@ def handle_run_all(args):
     """
     Runs the full pipeline: classifier → CAM → masks → segmentation → evaluation
     """
-    # Step 1: Train classifier
-    model_path, exp_name = handle_train_classifier(args)
-    args.experiment_name = exp_name  # Inject for generate step
+    if args.supervision!='full':
+        # Step 1: Train classifier
+        model_path, exp_name = handle_train_classifier(args)
+        args.experiment_name = exp_name  # Inject for generate step
 
-    # Step 2: Generate masks
-    mask_dir = handle_generate_masks(args, model_path)
+        # Step 2: Generate masks
+        mask_dir = handle_generate_masks(args, model_path)
     # Step 3: train segmentation
     segmentation_model_path = handle_train_segmentation(
         args=args,
