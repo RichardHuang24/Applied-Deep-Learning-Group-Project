@@ -136,7 +136,6 @@ class OxfordPetDataset(Dataset):
             else:
                 raise ValueError(f"Invalid line format: {line}")
 
-            # Ignore macOS hidden files like ._Abyssinian_100
             if filename.startswith("._"):
                 raise ValueError(f"Invalid filename: {filename}")
 

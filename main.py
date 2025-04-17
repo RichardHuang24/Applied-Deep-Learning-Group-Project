@@ -47,7 +47,7 @@ def main():
     parser_combo.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_combo.add_argument("--cam", choices=["gradcam", "cam"], help="CAM method to use", default="gradcam")
     parser_combo.add_argument("--experiment_name", default=None)
-    parser_combo.set_defaults(func=train_and_generate_masks)
+    parser_combo.set_defaults(func=handle_train_and_generate_masks)
 
     # --- Train Segmentation
     parser_segmentation = subparsers.add_parser("train_segmentation", parents=[common_parser], help="Train segmentation model")
@@ -122,7 +122,7 @@ def handle_download(args):
     download_dataset(dataset_dir, seed=42)
     print("Download complete. Exiting.")
 
-def train_and_generate_masks(args):
+def handle_train_and_generate_masks(args):
     """
     Trains the classifier and generates masks using the trained model.
     """
