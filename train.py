@@ -14,7 +14,6 @@ import time
 from datetime import datetime
 import data
 from models.classifier import create_classifier
-from models.cam import create_cam_model
 from models.pspnet import create_segmentation_model
 from utils.metrics import calculate_metrics
 

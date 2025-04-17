@@ -12,7 +12,7 @@ from tqdm import tqdm
 from PIL import Image
 import data
 from models.classifier import create_classifier
-from models.cam import GradCAM, create_cam_model, GradCAMForMask
+from models.cam import GradCAMForMask
 from utils.visualization import visualize_cam
 
 logger = logging.getLogger(__name__)
