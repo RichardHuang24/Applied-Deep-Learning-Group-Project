@@ -127,24 +127,6 @@ All results are automatically saved to `results/metrics_table.csv`.
 
 ---
 
-## 🧪 Experiment Workflow Example
-
-```bash
-# 1. Download the dataset
-python main.py download
-
-# 2. Run a fast test experiment
-python main.py run_all --init random --cam gradcam --supervision weak_gradcam
-
-# 3. Run a high-performance configuration
-python main.py run_all --init imagenet --cam cam --supervision weak_cam
-
-# 4. Run a fully supervised experiment
-python main.py run_all --init simclr --cam gradcam --supervision full
-```
-
----
-
 ## 📂 Project Structure
 
 ```
