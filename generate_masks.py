@@ -12,7 +12,7 @@ from tqdm import tqdm
 from PIL import Image
 import data
 from models.classifier import create_classifier
-from models.cam import GradCAMForMask
+from models.cam import GradCAMForMask, CAMForMask
 from utils.visualization import visualize_cam
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,11 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
         cam_model = GradCAMForMask(classifier)
 
     elif method == 'cam':
-        raise NotImplementedError("CAM method is not implemented yet.")
+        exp_name = f"{args.backbone}_{args.init}"
+        classifier = create_classifier(config, exp_name)
+        classifier.load_state_dict(torch.load(classifier_path, map_location=device))
+        classifier = classifier.to(device)
+        cam_model = CAMForMask(classifier)
     else:
         raise ValueError(f"Unsupported CAM method: {method}")
 

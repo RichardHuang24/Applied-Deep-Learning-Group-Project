@@ -12,6 +12,7 @@ import numpy as np
 import json
 import logging
 from PIL import Image
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -122,3 +123,69 @@ class GradCAMForMask:
         save_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure parent dir exists
         mask_img = Image.fromarray((mask * 255).astype(np.uint8))
         mask_img.save(save_path)
+
+
+class CAMForMask:
+    """
+    Vanilla CAM (Zhou et al. 2016) 
+    “Conv backbone + Global‑Pooling + FC” 
+    """
+    def __init__(self, model, target_layer=None):
+        self.model = model.eval()
+        # 1) find target layer
+        if target_layer is None:
+            backbone = model.model if hasattr(model, "model") else model
+            target_layer = backbone.layer4[-1] 
+
+        self.fmaps = None
+        target_layer.register_forward_hook(self._save_fmap)
+
+        # 2) get weights
+        if   hasattr(model, "fc"):            
+            self.fc_weights = model.fc.weight.data
+        elif hasattr(model, "classifier"):
+            self.fc_weights = model.classifier.weight.data
+        elif hasattr(model, "model") and hasattr(model.model, "fc"):
+            self.fc_weights = model.model.fc.weight.data
+        else:
+            raise RuntimeError("❌ Cannot locate final linear layer (fc) in model")
+
+        self.fc_weights = self.fc_weights.cpu()
+
+    def _save_fmap(self, m, x, y):
+        # y: [B, C, H, W]
+        self.fmaps = y.detach()
+
+    @torch.no_grad()
+    def generate_mask(self, img_tensor, target_class=None,
+                      orig_size=None, threshold=0.4):
+        """
+        Args:
+            img_tensor: [1,C,H,W] 
+            target_class: None -> predicted class
+        Returns:
+            cam_np, bin_mask (H,W)
+        """
+        logits = self.model(img_tensor)
+        if target_class is None:
+            target_class = torch.argmax(logits, 1).item()
+        # 3) calculate CAM = w*F
+        weights = self.fc_weights[target_class].to(self.fmaps.device).view(-1)
+        cam     = torch.einsum("c,chw->hw", weights, self.fmaps[0])
+
+        cam = cam.clamp(min=0)                         # ReLU
+        cam -= cam.min()
+        if cam.max() > 0:
+            cam /= cam.max()
+
+        if orig_size is not None:
+            cam = F.interpolate(cam[None, None, ...], size=orig_size,
+                                mode="bilinear", align_corners=False)[0,0]
+
+        cam_np = cam.cpu().numpy()
+        bin_mask = (cam_np >= threshold).astype(np.uint8)
+        return cam_np, bin_mask
+
+    def save_mask(self, mask, save_path: Path):
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(mask * 255).save(save_path)
