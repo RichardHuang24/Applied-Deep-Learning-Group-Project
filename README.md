@@ -66,12 +66,71 @@ python main.py download
 
 ## 🚀 Running Experiments
 
+### 🔹 Step 1: Train Image Classifier
+
+```bash
+python main.py train_classifier \
+    --backbone resnet50 \
+    --init imagenet \
+    --cam gradcam 
+```
+
+---
+
+### 🔹 Step 2: Generate CAM-based Pseudo Masks
+
+```bash
+python main.py generate_masks \
+    --cam gradcam \
+    --backbone resnet50 \
+    --init imagenet 
+```
+
+---
+
+### 🔹 Step 3: Train Segmentation Model
+
+```bash
+python main.py train_segmentation \
+    --supervision weak_gradcam \
+    --pseudo_masks_dir ./experiments/example_run/masks/ \
+    --cam gradcam \
+    --backbone resnet50 \
+    --init imagenet 
+```
+
+---
+
+### 🔹 Step 4: Evaluate Segmentation Performance
+
+```bash
+python main.py evaluate \
+    --supervision weak_gradcam \
+    --cam gradcam \
+    --init imagenet 
+```
+
+---
+
+### 🔹 Optional Step: Train Classifier and Generate Masks (in one command)
+
+```bash
+python main.py train_and_generate \
+    --init imagenet \
+    --cam gradcam 
+```
+
+---
+
 ### Run All Experiments
 
 To run all experiment combinations with a specific configuration:
 
 ```bash
-python main.py run_all --init random --cam gradcam --supervision weak_gradcam
+python main.py run_all \
+    --init imagenet \
+    --cam gradcam \
+    --supervision weak_gradcam
 ```
 
 ---
@@ -123,7 +182,7 @@ The framework evaluates segmentation performance using:
 - **Pixel Accuracy**: Percentage of correctly classified pixels.
 - **Mean IoU (mIoU)**: Average Intersection over Union across all classes.
 
-All results are automatically saved to `results/metrics_table.csv`.
+All results are automatically saved to `outputs/experiments.log`.
 
 ---
 
