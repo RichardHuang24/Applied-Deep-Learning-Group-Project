@@ -188,23 +188,37 @@ All results are automatically saved to `outputs/experiments.log`.
 
 ## 📂 Project Structure
 
-```
+```bash
 ├── main.py                  # Main runner
 ├── train.py                 # Training pipeline
 ├── generate_masks.py        # CAM mask generation
 ├── evaluate.py              # Evaluation utilities
-├── utils/                   # Utility functions
-│   └── download.py          # Dataset utils
-├── models/
-│   ├── classifier/          # ResNet-based classifiers
-│   ├── cam/                 # CAM methods: GradCAM, CAM
-│   └── segmentation/        # PSPNet (semantic segmentation)
-├── data/                    # Dataset handling
+├── data.py                  # Dataset handling
 ├── config.json              # Default experiment configuration
-└── requirements.txt         # Dependencies
-```
+├── requirements.txt         # Dependencies
 
----
+├── handlers/                # Core pipeline handlers
+│   ├── __init__.py
+│   ├── classifier.py        # Training classifier
+│   ├── segmentation.py      # Training segmentation model
+│   ├── masks.py             # CAM generation logic
+│   └── evaluate.py          # Evaluation handler
+
+├── models/                  # Model architecture definitions
+│   ├── __init__.py
+│   ├── cam.py               # CAM methods: GradCAM, CAM
+│   ├── classifier.py        # ResNet variants
+│   └── pspnet.py            # PSPNet for semantic segmentation
+
+├── utils/                   # Utility functions
+│   ├── __init__.py
+│   ├── download.py          # Dataset download
+│   ├── load_config.py       # Load and parse config
+│   ├── logging.py           # Logger utility
+│   ├── metrics.py           # Evaluation metrics
+│   └── visualization.py     # Visualization utilities
+
+```
 
 ## 📜 Citing
 
