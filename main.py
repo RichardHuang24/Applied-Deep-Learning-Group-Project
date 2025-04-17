@@ -89,7 +89,7 @@ def main():
     parser_all.add_argument("--cam", choices=["gradcam", "cam"], help="CAM method to use", default="gradcam")
     parser_all.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_all.add_argument("--experiment_name", default=None)
-    parser_all.set_defaults(func=handle_train_series)
+    parser_all.set_defaults(func=handle_run_all)
 
     # Parse and execute
     args = parser.parse_args()
@@ -138,54 +138,24 @@ def handle_run_all(args):
     """
     Runs the full pipeline: classifier → CAM → masks → segmentation → evaluation
     """
-    import time
-    from argparse import Namespace
-
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    experiment = f"{args.backbone}_{args.init}_{args.cam}_{timestamp}"
-
     # Step 1: Train classifier
-    handle_train_classifier(Namespace(
-        config=args.config,
-        backbone=args.backbone,
-        init=args.init,
-        experiment=experiment
-    ))
+    model_path, exp_name = handle_train_classifier(args)
+    args.experiment_name = exp_name  # Inject for generate step
 
-    # Step 2: Optionally train CAM model (if using CAM/CCAM)
-    if args.cam == "cam":
-        pass
-        model_path = f"outputs/experiments/{experiment}/cam_model/best_model.pth"
-    else:
-        model_path = f"outputs/experiments/{experiment}/classifier/best_model.pth"
-
-    # Step 3: Generate masks
-    handle_generate_masks(Namespace(
-        config=args.config,
-        cam=args.cam,
-        model_path=model_path,
-        backbone=args.backbone,
-        init=args.init,
-        experiment=experiment,
-        visualize=True
-    ))
-
-    # Step 4: Train segmentation
-    # handle_train_segmentation(Namespace(
-    #     config=args.config,
-    #     supervision=f"weak_{args.cam}",
-    #     pseudo_masks=f"outputs/experiments/{experiment}/masks",
-    #     experiment=experiment
-    # ))
-    #
-    # # Step 5: Evaluate
-    # handle_evaluate(Namespace(
-    #     config=args.config,
-    #     supervision=f"weak_{args.cam}",
-    #     checkpoint=f"outputs/experiments/{experiment}/segmentation/best_model.pth",
-    #     experiment=experiment,
-    #     visualize=True
-    # ))
+    # Step 2: Generate masks
+    mask_dir = handle_generate_masks(args, model_path)
+    # Step 3: train segmentation
+    segmentation_model_path = handle_train_segmentation(
+        args=args,
+        mask_dir=mask_dir
+    )
+    # Step 4: Evaluate segmentation model
+    args.checkpoint = segmentation_model_path
+    handle_evaluate(
+        args=args
+    )
+    print(f"Segmentation model saved to {segmentation_model_path}")
+    print("All steps completed successfully.")
 
 if __name__ == "__main__":
     main()

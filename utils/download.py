@@ -127,7 +127,7 @@ def download_dataset(dataset_dir, force_download=False, seed=42):
     os.makedirs(dataset_dir, exist_ok=True)
 
     # Setup logging
-    log_dir = 'output' / "downloads"
+    log_dir = Path('output') / "downloads"
     setup_logging(log_dir, log_name="download.log")
 
     logger.info(f"Preparing Oxford-IIIT Pet Dataset in {dataset_dir}")
