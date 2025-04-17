@@ -7,9 +7,9 @@ A **Weakly-Supervised Semantic Segmentation** framework for training and evaluat
 This framework implements a full pipeline for Weakly-Supervised Semantic Segmentation:
 
 1. Training an image classifier with various backbones and initialization methods.
-2. Generating Class Activation Maps (CAMs) using different techniques (e.g., Grad-CAM, CCAM).
+2. Generating Class Activation Maps (CAMs) using different techniques (e.g., GradCAM, CAM).
 3. Creating pseudo-masks from the activation maps.
-4. Training a segmentation model using the pseudo-masks.
+4. Training a segmentation model using the pseudo-masks or full masks.
 5. Evaluating the segmentation performance with standard metrics.
 
 ---
@@ -21,11 +21,10 @@ This framework implements a full pipeline for Weakly-Supervised Semantic Segment
 - Python 3.6+
 - PyTorch 1.7+
 - CUDA (recommended for faster training)
-- **Additional dependencies**: 
+- **Additional dependencies**:  
   - `torch`  
-  - `Pillow`  
-  - `tqdm`
-  - `numpy`
+  - `tqdm`  
+  - `Pillow`
 
 ---
 
@@ -55,68 +54,35 @@ pip install -r requirements.txt
 
 ## 📁 Dataset
 
-This framework is configured to work with **Oxford-IIIT Pet Dataset**.
+This framework is configured to work with the **Oxford-IIIT Pet Dataset**.
 
-Download the dataset with:
+To download the dataset, run:
 
 ```bash
-python main.py --download-only --config_path config.json
+python main.py download
 ```
-
-This will download the dataset to the location specified in your config file.
 
 ---
 
 ## 🚀 Running Experiments
 
-### Basic Usage
+### Run All Experiments
 
-To run a single experiment with default settings:
+To run all experiment combinations with a specific configuration:
 
 ```bash
-python main.py train_and_generate --config_path config.json --backbone resnet50 --init random --cam gradcam
+python main.py run_all --init random --cam gradcam --supervision weak_gradcam
 ```
 
 ---
 
-#### ✅ Available Options
+## ⚙️ Customization Options
 
-- `--config`: Path to configuration file (default: `"config.json"`)
-- `--backbone`: Backbone architecture (choices: `"resnet18"`, `"resnet34"`, `"resnet50"`)
-- `--init`: Initialization method (choices: `"simclr"`, `"imagenet"`, `"random"`)
-- `--cam`: CAM method (choices: `"gradcam"`, `"ccam"`; default is `"gradcam"`)
-- `--all`: Run **all** combinations of experiments
-- `--download`: Download dataset before running experiments
-- `--download-only`: Only download dataset
-- `--output`: Custom output directory
-
----
-
-### 🧪 Common Use Cases
-
-#### Run a Fast Test Experiment
-
-```bash
-python main.py --backbone resnet18 --init random --cam gradcam
-```
-
-#### Run a High-Performance Configuration
-
-```bash
-python main.py --backbone resnet50 --init imagenet --cam ccam
-```
-
-#### Run All Possible Combinations
-
-```bash
-python main.py --all
-```
-
-#### Download Dataset and Run
-
-```bash
-python main.py --download --backbone resnet50 --init imagenet --cam gradcam
-```
+| Option        | Values                          | Description                                |
+|---------------|----------------------------------|--------------------------------------------|
+| `--init`      | `random`, `simclr`, `imagenet`   | Initialization method                      |
+| `--cam`       | `gradcam`, `cam`                 | CAM method                                 |
+| `--supervision` | `weak_gradcam`, `weak_cam`, `full` | Type of supervision                       |
 
 ---
 
@@ -161,24 +127,6 @@ All results are automatically saved to `results/metrics_table.csv`.
 
 ---
 
-## 🧪 Experiment Workflow Example
-
-```bash
-# 1. Download the dataset
-python main.py --download-only
-
-# 2. Run a test experiment
-python main.py --backbone resnet18 --init random --cam gradcam
-
-# 3. Run a high-performance configuration
-python main.py --backbone resnet50 --init imagenet --cam ccam
-
-# 4. Compare all methods
-python main.py --all
-```
-
----
-
 ## 📂 Project Structure
 
 ```
@@ -188,12 +136,10 @@ python main.py --all
 ├── evaluate.py              # Evaluation utilities
 ├── utils/                   # Utility functions
 │   └── download.py          # Dataset utils
-│   └── metrics.py           # Evaluation metrics
-│   └── visualization.py     # PIL-based visualization
 ├── models/
-│   ├── classifier.py        # ResNet-based classifiers
-│   ├── cam.py               # CAM methods: GradCAM, CCAM
-│   └── pspnet.py/           # PSPNet (semantic segmentation)
+│   ├── classifier/          # ResNet-based classifiers
+│   ├── cam/                 # CAM methods: GradCAM, CAM
+│   └── segmentation/        # PSPNet (semantic segmentation)
 ├── data/                    # Dataset handling
 ├── config.json              # Default experiment configuration
 └── requirements.txt         # Dependencies
