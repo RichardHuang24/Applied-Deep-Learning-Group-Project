@@ -103,6 +103,7 @@ class PSPNet(nn.Module):
             raise ValueError("MoCo v2 weights are only available for ResNet-50 backbone.")
 
         local_path = Path("pretrained/mocov2_resnet50.pth")
+        local_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not local_path.exists():
             logger.info("Downloading MoCo v2 pretrained weights...")

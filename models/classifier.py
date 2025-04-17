@@ -70,6 +70,7 @@ class ResNetClassifier(nn.Module):
         # Checkpoint URL (MoCo v2 ResNet-50, 800 epochs)
         url = "https://dl.fbaipublicfiles.com/moco/moco_v2_800ep_pretrain.pth.tar"
         local_path = Path(f"pretrained/mocov2_{self.backbone_name}.pth")
+        local_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not local_path.exists():
             logger.info("Downloading MoCo v2 pretrained weights...")
