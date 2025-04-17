@@ -44,12 +44,6 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-#### Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
 ---
 
 ## 📁 Dataset
@@ -195,7 +189,6 @@ All results are automatically saved to `outputs/experiments.log`.
 ├── evaluate.py              # Evaluation utilities
 ├── data.py                  # Dataset handling
 ├── config.json              # Default experiment configuration
-├── requirements.txt         # Dependencies
 
 ├── handlers/                # Core pipeline handlers
 │   ├── __init__.py
