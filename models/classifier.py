@@ -73,6 +73,7 @@ class ResNetClassifier(nn.Module):
 
         if not local_path.exists():
             logger.info("Downloading MoCo v2 pretrained weights...")
+            local_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Direct download from official Facebook Research
             url = "https://dl.fbaipublicfiles.com/moco/moco_checkpoints/moco_v2_800ep/moco_v2_800ep_pretrain.pth.tar"
