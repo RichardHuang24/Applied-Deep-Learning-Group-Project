@@ -44,12 +44,6 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-#### Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
 ---
 
 ## 📁 Dataset
@@ -70,7 +64,6 @@ python main.py download
 
 ```bash
 python main.py train_classifier \
-    --backbone resnet50 \
     --init imagenet \
     --cam gradcam 
 ```
@@ -81,9 +74,8 @@ python main.py train_classifier \
 
 ```bash
 python main.py generate_masks \
-    --cam gradcam \
-    --backbone resnet50 \
-    --init imagenet 
+    --init imagenet \
+    --cam gradcam 
 ```
 
 ---
@@ -93,10 +85,8 @@ python main.py generate_masks \
 ```bash
 python main.py train_segmentation \
     --supervision weak_gradcam \
-    --pseudo_masks_dir ./experiments/example_run/masks/ \
-    --cam gradcam \
-    --backbone resnet50 \
-    --init imagenet 
+    --init imagenet \
+    --cam gradcam 
 ```
 
 ---
@@ -106,8 +96,8 @@ python main.py train_segmentation \
 ```bash
 python main.py evaluate \
     --supervision weak_gradcam \
-    --cam gradcam \
-    --init imagenet 
+    --init imagenet \
+    --cam gradcam 
 ```
 
 ---
@@ -116,6 +106,7 @@ python main.py evaluate \
 
 ```bash
 python main.py train_and_generate \
+    --supervision weak_gradcam
     --init imagenet \
     --cam gradcam 
 ```
@@ -128,9 +119,9 @@ To run all experiment combinations with a specific configuration:
 
 ```bash
 python main.py run_all \
+    --supervision weak_gradcam \
     --init imagenet \
-    --cam gradcam \
-    --supervision weak_gradcam
+    --cam gradcam 
 ```
 
 ---
@@ -188,23 +179,36 @@ All results are automatically saved to `outputs/experiments.log`.
 
 ## 📂 Project Structure
 
-```
+```bash
 ├── main.py                  # Main runner
 ├── train.py                 # Training pipeline
 ├── generate_masks.py        # CAM mask generation
 ├── evaluate.py              # Evaluation utilities
-├── utils/                   # Utility functions
-│   └── download.py          # Dataset utils
-├── models/
-│   ├── classifier/          # ResNet-based classifiers
-│   ├── cam/                 # CAM methods: GradCAM, CAM
-│   └── segmentation/        # PSPNet (semantic segmentation)
-├── data/                    # Dataset handling
+├── data.py                  # Dataset handling
 ├── config.json              # Default experiment configuration
-└── requirements.txt         # Dependencies
-```
 
----
+├── handlers/                # Core pipeline handlers
+│   ├── __init__.py
+│   ├── classifier.py        # Training classifier
+│   ├── segmentation.py      # Training segmentation model
+│   ├── masks.py             # CAM generation logic
+│   └── evaluate.py          # Evaluation handler
+
+├── models/                  # Model architecture definitions
+│   ├── __init__.py
+│   ├── cam.py               # CAM methods: GradCAM, CAM
+│   ├── classifier.py        # ResNet variants
+│   └── pspnet.py            # PSPNet for semantic segmentation
+
+├── utils/                   # Utility functions
+│   ├── __init__.py
+│   ├── download.py          # Dataset download
+│   ├── load_config.py       # Load and parse config
+│   ├── logging.py           # Logger utility
+│   ├── metrics.py           # Evaluation metrics
+│   └── visualization.py     # Visualization utilities
+
+```
 
 ## 📜 Citing
 
