@@ -31,9 +31,14 @@ def evaluate_model(model, dataloader, device, num_classes=2, visualize=True, out
 
             if visualize and output_dir:
                 for i in range(images.size(0)):
-                    vis_img = visualize_prediction(images[i].cpu(), preds[i].cpu(), trimaps[i].cpu())
-                    vis_img.save(output_dir / f"{filename}_pred.png")
-
+                    vis_img  = visualize_prediction(
+                                   images[i].cpu(),
+                                   preds[i].cpu(),
+                                   trimaps[i].cpu())
+                    img_name = Path(filename[i]).stem  
+                    (output_dir / f"{img_name}_pred.png").parent.mkdir(
+                        parents=True, exist_ok=True)
+                    vis_img.save(output_dir / f"{img_name}_pred.png")
                 all_images.extend(images.cpu())
                 all_preds.extend(preds.cpu())
                 all_targets.extend(trimaps.cpu())

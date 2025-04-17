@@ -12,7 +12,6 @@ def handle_train_segmentation(args, mask_dir=None):
         args: Parsed arguments from argparse, expected to have:
             - config (dict): Loaded configuration.
             - supervision (str): Supervision type (e.g., 'weak_gradcam').
-            - pseudo_masks_dir (str): Path to the directory with pseudo masks.
             - experiment_name (str): Name for the experiment run.
             - backbone (str): Backbone for the segmentation model.
             - config_path (str): Path to the config file (used by train_segmentation).
@@ -24,7 +23,7 @@ def handle_train_segmentation(args, mask_dir=None):
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     experiment_name = args.experiment_name or f"{args.backbone}_{args.init}_{args.cam}_{timestamp}"
     
-    mask_dir = args.pseudo_masks_dir if mask_dir is None else mask_dir
+    mask_dir = mask_dir if mask_dir is None else mask_dir
 
     # Define output directory based on experiment name
     output_dir = Path(config['paths']['outputs']) / "experiments" / experiment_name

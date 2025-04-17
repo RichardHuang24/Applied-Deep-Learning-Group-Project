@@ -22,6 +22,7 @@ def handle_evaluate(args):
         args=args,
         checkpoint_path=checkpoint_path,
         output_dir=output_dir,
+        visualize=args.visualize
     )
 
     print("Evaluation Metrics:")

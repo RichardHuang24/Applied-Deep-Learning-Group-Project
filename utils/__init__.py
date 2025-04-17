@@ -7,7 +7,7 @@ from .metrics import (
     calculate_metrics, print_metrics
 )
 from .visualization import (
-    tensor_to_pil, create_mask_overlay, visualize_prediction, 
+    tensor_to_pil, overlay_mask, visualize_prediction, 
     visualize_cam, visualize_results_grid
 )
 
@@ -20,7 +20,7 @@ __all__ = [
     'calculate_metrics', 'print_metrics',
     
     # Visualization
-    'tensor_to_pil', 'create_mask_overlay', 'visualize_prediction',
+    'tensor_to_pil', 'overlay_mask', 'visualize_prediction',
     'visualize_cam', 'visualize_results_grid',
 
     # Other utilities
