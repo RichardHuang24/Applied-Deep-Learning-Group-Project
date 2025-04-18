@@ -65,16 +65,22 @@ def run_experiment(command, experiment_name):
         return False
 
 # --- Run weakly-supervised combinations (with CAM)
-for init, cam, supervision in product(inits, cams, weak_supervisions):
-    experiment_name = f"{init}_{cam}_{supervision}"
-    command = [
-        "python", MAIN_SCRIPT, "run_all",
-        "--init", init,
-        "--cam", cam,
-        "--supervision", supervision
-    ]
-    if not run_experiment(command, experiment_name):
-        print(f"❌ Failed to run {experiment_name}")
+cam_supervision_pairs = {
+    "gradcam": "weak_gradcam",
+    "cam": "weak_cam"
+}
+
+for init in inits:
+    for cam, supervision in cam_supervision_pairs.items():
+        experiment_name = f"{init}_{cam}_{supervision}"
+        command = [
+            "python", MAIN_SCRIPT, "run_all",
+            "--init", init,
+            "--cam", cam,
+            "--supervision", supervision
+        ]
+        if not run_experiment(command, experiment_name):
+            print(f"❌ Failed to run {experiment_name}")
 
 # --- Run fully-supervised combinations (NO CAM)
 for init in inits:
