@@ -1,18 +1,17 @@
 """
 Class Activation Map (CAM) implementations:
 - Grad-CAM
-- CCAM (Cross-Channel Class Activation Mapping)
 """
 import os
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import json
 import logging
 from PIL import Image
 from pathlib import Path
+
+from .classifier import ResNetCAM
 
 logger = logging.getLogger(__name__)
 
@@ -124,68 +123,158 @@ class GradCAMForMask:
         mask_img = Image.fromarray((mask * 255).astype(np.uint8))
         mask_img.save(save_path)
 
-
 class CAMForMask:
     """
-    Vanilla CAM (Zhou et al. 2016) 
-    “Conv backbone + Global‑Pooling + FC” 
+    Class Activation Map generator for ResNetCAM models.
+    
+    This class generates class activation maps for a model with
+    Global Average Pooling architecture (following the original CAM paper).
     """
-    def __init__(self, model, target_layer=None):
-        self.model = model.eval()
-        # 1) find target layer
-        if target_layer is None:
-            backbone = model.model if hasattr(model, "model") else model
-            target_layer = backbone.layer4[-1] 
-
-        self.fmaps = None
-        target_layer.register_forward_hook(self._save_fmap)
-
-        # 2) get weights
-        if   hasattr(model, "fc"):            
-            self.fc_weights = model.fc.weight.data
-        elif hasattr(model, "classifier"):
-            self.fc_weights = model.classifier.weight.data
-        elif hasattr(model, "model") and hasattr(model.model, "fc"):
-            self.fc_weights = model.model.fc.weight.data
-        else:
-            raise RuntimeError("❌ Cannot locate final linear layer (fc) in model")
-
-        self.fc_weights = self.fc_weights.cpu()
-
-    def _save_fmap(self, m, x, y):
-        # y: [B, C, H, W]
-        self.fmaps = y.detach()
-
-    @torch.no_grad()
-    def generate_mask(self, img_tensor, target_class=None,
-                      orig_size=None, threshold=0.4):
+    
+    def __init__(self, model):
         """
+        Initialize CAM generator with a trained model.
+        
         Args:
-            img_tensor: [1,C,H,W] 
-            target_class: None -> predicted class
-        Returns:
-            cam_np, bin_mask (H,W)
+            model (ResNetCAM): A trained ResNetCAM model
         """
-        logits = self.model(img_tensor)
-        if target_class is None:
-            target_class = torch.argmax(logits, 1).item()
-        # 3) calculate CAM = w*F
-        weights = self.fc_weights[target_class].to(self.fmaps.device).view(-1)
-        cam     = torch.einsum("c,chw->hw", weights, self.fmaps[0])
-
-        cam = cam.clamp(min=0)                         # ReLU
-        cam -= cam.min()
-        if cam.max() > 0:
-            cam /= cam.max()
-
-        if orig_size is not None:
-            cam = F.interpolate(cam[None, None, ...], size=orig_size,
-                                mode="bilinear", align_corners=False)[0,0]
-
-        cam_np = cam.cpu().numpy()
-        bin_mask = (cam_np >= threshold).astype(np.uint8)
-        return cam_np, bin_mask
-
-    def save_mask(self, mask, save_path: Path):
+        if not isinstance(model, ResNetCAM):
+            raise ValueError("Model must be an instance of ResNetCAM")
+        
+        self.model = model
+        self.model.eval()
+    
+    def generate_mask(self, image_tensor, target_class=None, orig_size=None, threshold=0.4):
+        """
+        Generate a class activation map and binary mask from an input image.
+        
+        Args:
+            image_tensor (Tensor): Input image tensor [1, C, H, W]
+            target_class (int or None): Target class index. If None, use predicted class
+            orig_size (tuple): Resize CAM to this (H, W) if given
+            threshold (float): Value in [0, 1] to threshold the CAM
+            
+        Returns:
+            cam_np: Raw CAM (H, W) as float
+            binary_mask: Thresholded mask (H, W) as uint8
+        """
+        # Forward pass
+        with torch.no_grad():
+            # Get model prediction if target class not specified
+            if target_class is None:
+                outputs = self.model(image_tensor)
+                target_class = torch.argmax(outputs, dim=1).item()
+            elif isinstance(target_class, torch.Tensor):
+                target_class = target_class.item()
+            
+            # Get feature maps from the last convolutional layer
+            feature_maps = self.model.get_activations(image_tensor)  # [1, C, H, W]
+            
+            # Get class-specific weights
+            class_weights = self.model.get_cam_weights()[target_class]  # [C]
+            
+            # Compute weighted sum of feature maps
+            batch_size, num_channels, height, width = feature_maps.shape
+            cam = torch.zeros(height, width, device=feature_maps.device)
+            
+            for i, w in enumerate(class_weights):
+                cam += w * feature_maps[0, i]  # Add weighted activation maps
+            
+            # Apply ReLU to focus on positive activations
+            cam = F.relu(cam)
+            
+            # Convert to numpy and normalize
+            cam_np = cam.cpu().numpy()
+            cam_np -= cam_np.min()
+            cam_max = cam_np.max()
+            if cam_max > 0:
+                cam_np /= cam_max
+            
+            # Resize if needed
+            if orig_size is not None:
+                cam_tensor = torch.tensor(cam_np, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                resized_cam = F.interpolate(cam_tensor, size=orig_size, mode='bilinear', align_corners=False)
+                cam_np = resized_cam.squeeze().cpu().numpy()
+            
+            # Threshold to get binary mask
+            binary_mask = (cam_np >= threshold).astype(np.uint8)
+            
+            return cam_np, binary_mask
+    
+    def save_mask(self, mask, save_path):
+        """
+        Save binary mask to a .png file using pathlib.Path.
+        
+        Args:
+            mask (np.ndarray): Binary mask (0 or 1)
+            save_path (Path): Pathlib Path to save the .png mask
+        """
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(mask * 255).save(save_path)
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_img.save(save_path)
+
+
+# class CAMForMask:
+#     """
+#     Vanilla CAM (Zhou et al. 2016) 
+#     “Conv backbone + Global‑Pooling + FC” 
+#     """
+#     def __init__(self, model, target_layer=None):
+#         self.model = model.eval()
+#         # 1) find target layer
+#         if target_layer is None:
+#             backbone = model.model if hasattr(model, "model") else model
+#             target_layer = backbone.layer4[-1] 
+
+#         self.fmaps = None
+#         target_layer.register_forward_hook(self._save_fmap)
+
+#         # 2) get weights
+#         if   hasattr(model, "fc"):            
+#             self.fc_weights = model.fc.weight.data
+#         elif hasattr(model, "classifier"):
+#             self.fc_weights = model.classifier.weight.data
+#         elif hasattr(model, "model") and hasattr(model.model, "fc"):
+#             self.fc_weights = model.model.fc.weight.data
+#         else:
+#             raise RuntimeError("❌ Cannot locate final linear layer (fc) in model")
+
+#         self.fc_weights = self.fc_weights.cpu()
+
+#     def _save_fmap(self, m, x, y):
+#         # y: [B, C, H, W]
+#         self.fmaps = y.detach()
+
+#     @torch.no_grad()
+#     def generate_mask(self, img_tensor, target_class=None,
+#                       orig_size=None, threshold=0.4):
+#         """
+#         Args:
+#             img_tensor: [1,C,H,W] 
+#             target_class: None -> predicted class
+#         Returns:
+#             cam_np, bin_mask (H,W)
+#         """
+#         logits = self.model(img_tensor)
+#         if target_class is None:
+#             target_class = torch.argmax(logits, 1).item()
+#         # 3) calculate CAM = w*F
+#         weights = self.fc_weights[target_class].to(self.fmaps.device).view(-1)
+#         cam     = torch.einsum("c,chw->hw", weights, self.fmaps[0])
+
+#         cam = cam.clamp(min=0)                         # ReLU
+#         cam -= cam.min()
+#         if cam.max() > 0:
+#             cam /= cam.max()
+
+#         if orig_size is not None:
+#             cam = F.interpolate(cam[None, None, ...], size=orig_size,
+#                                 mode="bilinear", align_corners=False)[0,0]
+
+#         cam_np = cam.cpu().numpy()
+#         bin_mask = (cam_np >= threshold).astype(np.uint8)
+#         return cam_np, bin_mask
+
+#     def save_mask(self, mask, save_path: Path):
+#         save_path.parent.mkdir(parents=True, exist_ok=True)
+#         Image.fromarray(mask * 255).save(save_path)

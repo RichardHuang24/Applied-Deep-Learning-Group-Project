@@ -23,7 +23,7 @@ def handle_train_segmentation(args, mask_dir=None):
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     experiment_name = args.experiment_name or f"{args.backbone}_{args.init}_{args.cam}_{timestamp}"
     
-    mask_dir = mask_dir if mask_dir is None else mask_dir
+    mask_dir = mask_dir if mask_dir is not None else args.pseudo_masks_dir
 
     # Define output directory based on experiment name
     output_dir = Path(config['paths']['outputs']) / "experiments" / experiment_name
