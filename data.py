@@ -51,18 +51,8 @@ def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True, retu
         pin_memory=True
     )
 
-def get_train_transform():
-    train_transform = transforms.Compose([
-        transforms.Resize((256, 256)),  # Resize all images to a fixed size
-        transforms.RandomHorizontalFlip(),  # Apply random horizontal flip
-        transforms.RandomCrop((224, 224)),  # Randomly crop to 224x224
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet stats
-    ])
 
-    return train_transform
-
-def get_val_transform():
+def get_base_transform_img():
     val_transform = transforms.Compose([
         transforms.Resize((224, 224)),  # Resize all images to 224x224
         transforms.ToTensor(),
@@ -71,7 +61,7 @@ def get_val_transform():
 
     return val_transform
 
-def get_trimap_transform():
+def get_base_transform_label():
     return transforms.Compose([
         transforms.Resize((224, 224)),  # Resize trimaps to match image size
         transforms.ToTensor()  # Convert trimaps to tensor
@@ -130,25 +120,20 @@ class OxfordPetDataset(Dataset):
         self.trimaps_dir = os.path.join(self.annotation_dir, "trimaps")
         self.pseudomask_dir = mask_dir
         self.xml_dir = os.path.join(self.annotation_dir, "xmls")
+        
+        self.base_transform_img = get_base_transform_img()
+        self.base_transform_label = get_base_transform_label()
 
-        self.transform = transform
-        self.transform_trimaps = transform_trimaps
-        self.transform_pseudomasks = transform_pseudomasks
-
-        self.return_bbox = return_bbox
         self.return_trimaps = return_trimaps
         self.return_pseudomask = return_pseudomask
+        assert not (self.return_trimaps and self.return_pseudomask), "Cannot return both trimaps and pseudomasks at the same time."
         self.label_type = label_type
-
-        if self.transform is None:
-            self.transform = get_train_transform() if split == "train" else get_val_transform()
         
-        if self.return_trimaps and self.transform_trimaps is None:
-            self.transform_trimaps = get_trimap_transform()
-        if self.return_pseudomask and self.transform_pseudomasks is None:
-            if self.pseudomask_dir is None:
-                raise ValueError("Pseudomask directory is not provided.")
-            self.transform_pseudomasks = get_trimap_transform()
+        if self.return_trimaps and self.trimaps_dir is None:
+            raise ValueError("Trimap directory is not provided.")
+        if self.return_pseudomask and self.pseudomask_dir is None:
+            raise ValueError("Pseudomask directory is not provided.")
+
             
         # Load the annotation list
         list_path = os.path.join(self.annotation_dir, f"{split}.txt") if split != "all" else os.path.join(self.annotation_dir, "list.txt")
@@ -196,13 +181,14 @@ class OxfordPetDataset(Dataset):
 
         # Load trimap (optional)
         trimap = None
-        if self.return_trimaps or self.return_pseudomask:
+        if self.return_trimaps:
             trimap_path = os.path.join(self.trimaps_dir, f"{filename}.png")
             trimap = Image.open(trimap_path).convert('L')
             trimap_np = np.array(trimap)
             # In Oxford Pet, 3 indicates background. We map background to 0 and foreground to 1.
-            trimap_np[trimap_np == 3] = 1
-            trimap_np -= 1
+            trimap_np[trimap_np == 3] = 0
+            trimap_np[trimap_np == 1] = 0
+            trimap_np[trimap_np == 2] = 1
             trimap = Image.fromarray(trimap_np.astype(np.uint8))
 
         # Load pseudomask (optional)
@@ -212,49 +198,29 @@ class OxfordPetDataset(Dataset):
             if os.path.exists(pseudo_path):
                 pseudomask = Image.open(pseudo_path).convert('L')
             else:
-                logger.warning(f"Pseudomask not found: {pseudo_path}")
-                pseudomask = Image.new('L', (224, 224), 0)
+                raise FileNotFoundError(f"Pseudomask not found: {pseudo_path}")
 
         # Apply transforms
-        if (self.return_trimaps or self.return_pseudomask) and trimap is not None and self.split == 'train':
+        if self.return_trimaps and self.split == 'train':
             # Use synchronized transforms for the training set
             synced_transform = SyncedTransform()
             image, trimap = synced_transform(image, trimap)
+        elif self.return_pseudomask and self.split == 'train':
+            # Use synchronized transforms for the training set
+            synced_transform = SyncedTransform()
+            image, pseudomask = synced_transform(image, pseudomask)
         else:
             # Use standard transforms for non-training sets or when masks are not required
-            if self.transform:
-                image = self.transform(image)
-                
-            if (self.return_trimaps or self.return_pseudomask) and trimap is not None:
-                if self.transform_trimaps:
-                    trimap = self.transform_trimaps(trimap)
-                    trimap = (trimap * 255).round().long().squeeze(0)
-                    trimap = 1 - trimap  # 1 = foreground, 0 = background
-
-        if self.return_pseudomask and pseudomask is not None and self.transform_pseudomasks:
-            pseudomask = self.transform_pseudomasks(pseudomask)
+            image = self.base_transform_img(image)
+            if self.return_trimaps:
+                trimap = self.base_transform_label(trimap)
+            elif self.return_pseudomask:
+                pseudomask = self.base_transform_label(pseudomask)
 
         # Return based on supervision mode
         if self.return_pseudomask:
-            return image, pseudomask, trimap
+            return image, pseudomask, filename
         elif self.return_trimaps:
             return image, trimap, filename
         else:
             return image, label, filename
-
-    def _load_bbox_from_xml(self, xml_path):
-        try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-            obj = root.find('object')
-            bbox = obj.find('bndbox') if obj is not None else None
-            if bbox:
-                xmin = int(bbox.find('xmin').text)
-                ymin = int(bbox.find('ymin').text)
-                xmax = int(bbox.find('xmax').text)
-                ymax = int(bbox.find('ymax').text)
-                return (xmin, ymin, xmax, ymax)
-        except Exception:
-            pass
-        return (0, 0, 0, 0)
-
