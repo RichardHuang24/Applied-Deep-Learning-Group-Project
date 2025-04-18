@@ -130,35 +130,110 @@ class ResNetClassifier(nn.Module):
         features = self.model.layer4(x)
         return features
 
+class ResNetCAM(ResNetClassifier):
+    """
+    ResNet with Global Average Pooling for Class Activation Mapping (CAM)
+    
+    This architecture modifies the standard ResNet to follow the original CAM paper's
+    approach, where the final convolutional layer is directly connected to the 
+    classification layer via global average pooling.
+    """
+    def __init__(self, backbone='resnet50', initialization='imagenet', num_classes=37):
+        super().__init__(backbone, initialization, num_classes)
+        
+        # Store the feature extractor (all layers except avgpool and fc)
+        self.features = nn.Sequential(
+            self.model.conv1,
+            self.model.bn1,
+            self.model.relu,
+            self.model.maxpool,
+            self.model.layer1,
+            self.model.layer2,
+            self.model.layer3,
+            self.model.layer4
+        )
+        
+        # Replace the average pooling with an explicit global average pooling
+        self.global_pool = nn.AdaptiveAvgPool2d(1)
+        
+        # Create new classifier layer with the same input features as the original
+        in_features = self.model.fc.in_features
+        self.classifier = nn.Linear(in_features, num_classes)
+        
+        # Initialize with the same weights from the original model
+        self.classifier.weight.data = self.model.fc.weight.data.clone()
+        self.classifier.bias.data = self.model.fc.bias.data.clone()
+    
+    def forward(self, x):
+        # Extract features
+        features = self.features(x)
+        
+        # Global Average Pooling
+        pooled = self.global_pool(features).view(features.size(0), -1)
+        
+        # Classification
+        logits = self.classifier(pooled)
+        
+        return logits
+    
+    def get_cam_weights(self):
+        """
+        Returns the weights of the final classification layer.
+        These weights are used to compute the CAM.
+        """
+        return self.classifier.weight.data
+    
+    def get_activations(self, x):
+        """
+        Extract feature map activations from the last convolutional layer.
+        
+        Args:
+            x (Tensor): Input image tensor
+            
+        Returns:
+            Tensor: Feature maps from the last conv layer
+        """
+        return self.features(x)
+
+
+
 def create_classifier(config, experiment=None):
     """
     Factory function to create classifier model
     
     Args:
-        config_path (str): Path to configuration file
+        config (dict): Configuration dictionary
         experiment (str): Experiment name from config (if None, use default settings)
     
     Returns:
-        ResNetClassifier: Configured classifier model
+        ResNetClassifier or ResNetCAM: Configured classifier model
     """
-
     
     num_classes = config['dataset']['num_classes']
-    
+    print(f"Experiment: {experiment}")
     # Get backbone and initialization based on experiment or defaults
     if experiment:
         parts = experiment.split('_')
         backbone = parts[0]
         initialization = parts[1] if len(parts) > 1 else 'imagenet'
-        print(f"Using experiment settings: Backbone={backbone}, Initialization={initialization}")
+        method = parts[2] if len(parts) > 2 else 'standard'  # cam, gradcam, or standard
+        print(f"Using experiment settings: Backbone={backbone}, Initialization={initialization}, Method={method}")
     else:
         # Use defaults
         backbone = config['models']['classifier']['default']['backbone']
         initialization = config['models']['classifier']['default']['initialization']
+        method = 'standard'
     
-    # Create and return the classifier
-    return ResNetClassifier(
-        backbone=backbone,
-        initialization=initialization,
-        num_classes=num_classes
-    )
+    # Create and return the appropriate classifier based on method
+    if method.lower() == 'cam':
+        return ResNetCAM(
+            backbone=backbone,
+            initialization=initialization,
+            num_classes=num_classes
+        )
+    else:
+        return ResNetClassifier(
+            backbone=backbone,
+            initialization=initialization,
+            num_classes=num_classes
+        )

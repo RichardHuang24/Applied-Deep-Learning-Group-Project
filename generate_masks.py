@@ -57,14 +57,14 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
 
     # Create CAM model
     if method == 'gradcam':
-        exp_name = f"{args.backbone}_{args.init}"
+        exp_name = f"{args.backbone}_{args.init}_{method}"
         classifier = create_classifier(config, exp_name)
         classifier.load_state_dict(torch.load(classifier_path, map_location=device))
         classifier = classifier.to(device)
         cam_model = GradCAMForMask(classifier)
 
     elif method == 'cam':
-        exp_name = f"{args.backbone}_{args.init}"
+        exp_name = f"{args.backbone}_{args.init}_{method}"
         classifier = create_classifier(config, exp_name)
         classifier.load_state_dict(torch.load(classifier_path, map_location=device))
         classifier = classifier.to(device)

@@ -36,7 +36,7 @@ def main():
     # --- Generate Masks
     parser_masks = subparsers.add_parser("generate_masks", parents=[common_parser], help="Generate CAM-based pseudo masks")
     parser_masks.add_argument("--config_path", help="Path to the config file", default="config.json")
-    parser_masks.add_argument("--cam", choices=["gradcam", "cam"], help="CAM method to use", default="gradcam")
+    parser_masks.add_argument("--cam", choices=["gradcam", "cam"], help="CAM method to use", default="cam")
     parser_masks.add_argument("--model_path", required=True, help="Path to the trained model checkpoint")
     parser_masks.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
     parser_masks.add_argument("--experiment_name", default=None)
@@ -55,7 +55,7 @@ def main():
     # --- Train Segmentation
     parser_segmentation = subparsers.add_parser("train_segmentation", parents=[common_parser], help="Train segmentation model")
     parser_segmentation.add_argument("--config_path", help="Path to the config file", default="config.json")
-    parser_segmentation.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_gradcam")
+    parser_segmentation.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_cam")
     parser_segmentation.add_argument("--pseudo_masks_dir", default=None, help="Directory containing pseudo masks")
     parser_segmentation.add_argument("--experiment_name", default=None)
     parser_segmentation.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
@@ -75,8 +75,7 @@ def main():
 
     # --- Evaluate
     parser_eval = subparsers.add_parser("evaluate", parents=[common_parser], help="Evaluate segmentation model")
-    parser_eval.add_argument("--config_path", required=True, help="Path to config.json")
-    parser_eval.add_argument("--supervision", required=True, choices=["full", "weak_gradcam", "weak_cam"])
+    parser_eval.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_eval.add_argument("--checkpoint",required=True, help="Path to model checkpoint")
     parser_eval.add_argument("--visualize", help="Save visualization images", default=False, action="store_false")
     parser_eval.add_argument("--experiment_name", default=None)
