@@ -4,6 +4,7 @@ ResNet classifier models with different backbones and initialization options
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import json
 import logging
 import torchvision.models as models
@@ -111,14 +112,7 @@ class ResNetClassifier(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    def get_features(self, x, layer='layer4'):
-        """
-        Extract features from a specific intermediate layer.
-        Currently supports 'layer4' only.
-        """
-        if layer != 'layer4':
-            raise ValueError(f"Layer {layer} not supported")
-
+    def get_features(self, x):
         x = self.model.conv1(x)
         x = self.model.bn1(x)
         x = self.model.relu(x)
@@ -126,9 +120,11 @@ class ResNetClassifier(nn.Module):
 
         x = self.model.layer1(x)
         x = self.model.layer2(x)
-        x = self.model.layer3(x)
-        features = self.model.layer4(x)
-        return features
+        x1 = self.model.layer3(x)
+        x2 = self.model.layer4(x1)
+        
+        x2 = F.interpolate(x2, size=x1.shape[2:], mode='bilinear', align_corners=False)
+        return torch.cat([x2, x1], dim=-3)
 
 class ResNetCAM(ResNetClassifier):
     """
@@ -141,38 +137,26 @@ class ResNetCAM(ResNetClassifier):
     def __init__(self, backbone='resnet50', initialization='imagenet', num_classes=37):
         super().__init__(backbone, initialization, num_classes)
         
-        # Store the feature extractor (all layers except avgpool and fc)
-        self.features = nn.Sequential(
-            self.model.conv1,
-            self.model.bn1,
-            self.model.relu,
-            self.model.maxpool,
-            self.model.layer1,
-            self.model.layer2,
-            self.model.layer3,
-            self.model.layer4
-        )
-        
         # Replace the average pooling with an explicit global average pooling
         self.global_pool = nn.AdaptiveAvgPool2d(1)
-        
-        # Create new classifier layer with the same input features as the original
-        in_features = self.model.fc.in_features
-        self.classifier = nn.Linear(in_features, num_classes)
-        
-        # Initialize with the same weights from the original model
-        self.classifier.weight.data = self.model.fc.weight.data.clone()
-        self.classifier.bias.data = self.model.fc.bias.data.clone()
     
     def forward(self, x):
         # Extract features
-        features = self.features(x)
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        features = self.model.layer4(x)
         
         # Global Average Pooling
         pooled = self.global_pool(features).view(features.size(0), -1)
         
         # Classification
-        logits = self.classifier(pooled)
+        logits = self.model.fc(pooled)
         
         return logits
     
@@ -181,7 +165,7 @@ class ResNetCAM(ResNetClassifier):
         Returns the weights of the final classification layer.
         These weights are used to compute the CAM.
         """
-        return self.classifier.weight.data
+        return self.model.fc.weight.data
     
     def get_activations(self, x):
         """
@@ -193,8 +177,7 @@ class ResNetCAM(ResNetClassifier):
         Returns:
             Tensor: Feature maps from the last conv layer
         """
-        return self.features(x)
-
+        return self.get_features(x)
 
 
 def create_classifier(config, experiment=None):
@@ -216,24 +199,31 @@ def create_classifier(config, experiment=None):
         parts = experiment.split('_')
         backbone = parts[0]
         initialization = parts[1] if len(parts) > 1 else 'imagenet'
-        method = parts[2] if len(parts) > 2 else 'standard'  # cam, gradcam, or standard
+        method = parts[2] if len(parts) > 2 else 'cam'  # cam, gradcam
         print(f"Using experiment settings: Backbone={backbone}, Initialization={initialization}, Method={method}")
     else:
         # Use defaults
         backbone = config['models']['classifier']['default']['backbone']
         initialization = config['models']['classifier']['default']['initialization']
-        method = 'standard'
+        method = 'cam'
     
     # Create and return the appropriate classifier based on method
-    if method.lower() == 'cam':
+    if method.lower() == 'cam' or method.lower() == 'cam+ccam':
         return ResNetCAM(
             backbone=backbone,
             initialization=initialization,
             num_classes=num_classes
         )
-    else:
+    elif method.lower() == 'gradcam' or method.lower() == 'gradcam+ccam':
         return ResNetClassifier(
             backbone=backbone,
             initialization=initialization,
             num_classes=num_classes
         )
+    else:
+        raise ValueError(f"Unsupported method: {method}. Use 'cam' or 'gradcam'.")
+    
+
+if __name__ == "__main__":
+    print(ResNetCAM())
+    print(ResNetClassifier())

@@ -8,18 +8,18 @@
   "training": {
     "seed": 42,
     "epochs": {
-      "pspnet": 50
+      "pspnet": 10
     },
     "batch_size": 32,
     "num_workers": 4,
     "lr": {
-      "classifier": 0.0001,
+      "classifier": 0.0005,
       "cam": 0.0001,
-      "pspnet": 0.0001
+      "pspnet": 0.0005
     },
     "weight_decay": 1e-4,
-    "num_epochs": 50,
-    "learning_rate": 1e-4
+    "num_epochs": 10,
+    "learning_rate": 5e-4
   },
   "models": {
     "classifier": {

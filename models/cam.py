@@ -1,10 +1,12 @@
 """
 Class Activation Map (CAM) implementations:
 - Grad-CAM
+- CAM (Zhou et al. 2016)
 """
 import os
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import logging
@@ -123,6 +125,7 @@ class GradCAMForMask:
         mask_img = Image.fromarray((mask * 255).astype(np.uint8))
         mask_img.save(save_path)
 
+
 class CAMForMask:
     """
     Class Activation Map generator for ResNetCAM models.
@@ -214,11 +217,75 @@ class CAMForMask:
         mask_img.save(save_path)
 
 
+class CCAMForMask:
+    """
+    CCAM wrapper for generating pseudo-masks for weakly-supervised segmentation.
+    Follows the same interface as GradCAMForMask and CAMForMask to ensure compatibility.
+    """
+    def __init__(self, model):
+        """
+        Initialize CCAMForMask with a trained CCAM model
+        
+        Args:
+            model: Trained CCamModel instance
+        """
+        self.model = model
+        self.model.eval()
+    
+    def generate_mask(self, image_tensor, target_class=None, orig_size=None, threshold=0.4, relu=True):
+        """
+        Generate a pseudo-mask from an input image tensor using CCAM.
+        Maintains the same interface as GradCAMForMask for compatibility.
+        
+        Args:
+            image_tensor (Tensor): Image tensor [1, C, H, W]
+            target_class (int or None): Not used in CCAM (class-agnostic)
+            orig_size (tuple): Resize CAM to this (H, W) if given
+            threshold (float): Value in [0, 1] to threshold the CAM
+            relu (bool): Not used in CCAM (always applies sigmoid)
+            
+        Returns:
+            cam_np: Raw CAM (H, W) as float
+            binary_mask: Thresholded mask (H, W) as uint8
+        """
+        # Forward pass through CCAM model
+        with torch.no_grad():
+            fg_feats, bg_feats, ccam = self.model(image_tensor)
+            
+            # Get CAM
+            cam = ccam.squeeze().cpu().numpy()
+            
+            # Normalize CAM (already normalized by sigmoid, but let's ensure ranges)
+            cam = cam - cam.min()
+            cam_max = cam.max()
+            if cam_max > 0:
+                cam /= cam_max
+            
+            # Resize if needed
+            if orig_size is not None:
+                cam_tensor = torch.tensor(cam, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                resized_cam = F.interpolate(cam_tensor, size=orig_size, mode='bilinear', align_corners=False)
+                cam = resized_cam.squeeze().cpu().numpy()
+            
+            # Threshold to get binary mask
+            binary_mask = (cam >= threshold).astype(np.uint8)
+            
+            return cam, binary_mask
+    
+    def save_mask(self, mask, save_path):
+        """
+        Save binary mask to a .png file using pathlib.Path
+        
+        Args:
+            mask (np.ndarray): Binary mask (0 or 1)
+            save_path (Path): Pathlib Path to save the .png mask
+        """
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_img.save(save_path)
+
 # class CAMForMask:
-#     """
-#     Vanilla CAM (Zhou et al. 2016) 
-#     “Conv backbone + Global‑Pooling + FC” 
-#     """
 #     def __init__(self, model, target_layer=None):
 #         self.model = model.eval()
 #         # 1) find target layer
