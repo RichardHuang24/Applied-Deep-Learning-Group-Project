@@ -88,6 +88,14 @@ def tensor_to_pil(tensor):
     if tensor.dim() == 4:
         tensor = tensor[0]  # first element of batch
 
+    # Add denormalization for RGB images
+    if tensor.dim() == 3 and tensor.size(0) == 3:
+        # ImageNet mean and std values for denormalization
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(tensor.device)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(tensor.device)
+        # Apply denormalization to restore natural colors
+        tensor = tensor * std + mean
+
     if tensor.dim() == 3 and tensor.size(0) in (1, 3):
         tensor = tensor.permute(1, 2, 0)  # to (H, W, C)
 
