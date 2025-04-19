@@ -191,6 +191,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     lr = config.get('models', {}).get('ccam', {}).get('lr', 0.0001)
     alpha = config.get('models', {}).get('ccam', {}).get('alpha', 0.05)
     num_classes = config['dataset']['num_classes']
+    threshold = config.get('models', {}).get('cam', {}).get('threshold', 0.4)
     
     # Create CCAM model
     ccam_model = CCamModel(
