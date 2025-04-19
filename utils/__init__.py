@@ -1,7 +1,7 @@
 """
 Utility functions for weakly-supervised segmentation
 """
-from .download import download_dataset, verify_dataset, download_file, extract_tarfile
+from .download import download_dataset
 from .metrics import (
     calculate_pixel_accuracy, calculate_iou, calculate_miou, 
     calculate_metrics, print_metrics
@@ -13,7 +13,7 @@ from .visualization import (
 
 __all__ = [
     # Download utilities
-    'download_dataset', 'verify_dataset', 'download_file', 'extract_tarfile',
+    'download_dataset'
     
     # Metrics
     'calculate_pixel_accuracy', 'calculate_iou', 'calculate_miou', 
