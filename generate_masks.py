@@ -177,6 +177,14 @@ def generate_cam_masks(config, method, classifier_path, output_dir,
     
     return cams_dir, masks_dir
 
+
+def check_positive(am):
+    am[am > 0.5] = 1
+    am[am <= 0.5] = 0
+    edge_mean = (am[0, :].mean() + am[:, 0].mean() + am[-1, :].mean() + am[:, -1].mean()) / 4
+    return edge_mean > 0.5
+
+
 def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir, 
                        visualize, threshold, args, device):
     """
@@ -186,12 +194,12 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     import data
     
     # Get configuration parameters
-    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 15)
+    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 20)
     batch_size = config.get('models', {}).get('ccam', {}).get('batch_size', 32)
     lr = config.get('models', {}).get('ccam', {}).get('lr', 0.0001)
     alpha = config.get('models', {}).get('ccam', {}).get('alpha', 0.05)
     num_classes = config['dataset']['num_classes']
-    threshold = config.get('models', {}).get('cam', {}).get('threshold', 0.4)
+    threshold = config.get('models', {}).get('cam', {}).get('threshold', 0.3)
     
     # Create CCAM model
     ccam_model = CCamModel(
@@ -230,7 +238,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     
     # Add supervision loss if initial CAMs are provided
     if initial_cams_dir is not None:
-        criterion.append(SupervisionLoss(high_threshold=0.7, low_threshold=0.2).to(device))
+        criterion.append(SupervisionLoss(high_threshold=0.6, low_threshold=0.2).to(device))
     
     # Get parameter groups for optimizer
     param_groups = ccam_model.get_parameter_groups()
@@ -280,6 +288,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     
     # Generate final masks using the trained CCAM model
     logger.info("Generating final CCAM masks")
+    flag = None
     for image, label, fname in tqdm(all_dataloader, desc="Generating CCAM masks"):
         mask_name = fname[0].split(".")[0] + ".png"
         cam_name = fname[0].split(".")[0] + ".npy"
@@ -295,6 +304,13 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
                 orig_size=(448, 448),
                 threshold=threshold
             )
+            
+            if flag is None:
+                flag = check_positive(cam)
+                if flag:
+                    print("reverting masks")
+            if flag:
+                cam = 1 - cam
             
             # Save binary mask
             cam_model.save_mask(binary_mask, mask_path)
