@@ -101,10 +101,6 @@ class SyncedTransform:
         # Normalize the image only
         if self.normalize:
             image = TF.normalize(image, self.mean, self.std)
-            
-        # Process the mask: scale to [0, 255], round, and convert to long
-        mask = (mask * 255).round().long().squeeze(0)
-        mask = 1 - mask  # Keep the logic: 1 = foreground, 0 = background
         
         return image, mask
     
@@ -185,10 +181,9 @@ class OxfordPetDataset(Dataset):
             trimap_path = os.path.join(self.trimaps_dir, f"{filename}.png")
             trimap = Image.open(trimap_path).convert('L')
             trimap_np = np.array(trimap)
-            # In Oxford Pet, 3 indicates background. We map background to 0 and foreground to 1.
+            trimap_np[trimap_np == 1] = 255
+            trimap_np[trimap_np == 2] = 0
             trimap_np[trimap_np == 3] = 0
-            trimap_np[trimap_np == 1] = 0
-            trimap_np[trimap_np == 2] = 1
             trimap = Image.fromarray(trimap_np.astype(np.uint8))
 
         # Load pseudomask (optional)

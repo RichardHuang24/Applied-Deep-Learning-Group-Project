@@ -55,7 +55,7 @@ def main():
     # --- Train Segmentation
     parser_segmentation = subparsers.add_parser("train_segmentation", parents=[common_parser], help="Train segmentation model")
     parser_segmentation.add_argument("--config_path", help="Path to the config file", default="config.json")
-    parser_segmentation.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_cam")
+    parser_segmentation.add_argument("--supervision", choices=["full", "weak"], help="Supervision type", default="weak")
     parser_segmentation.add_argument("--pseudo_masks_dir", default=None, help="Directory containing pseudo masks")
     parser_segmentation.add_argument("--experiment_name", default=None)
     parser_segmentation.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
@@ -67,9 +67,9 @@ def main():
     parser_series = subparsers.add_parser("run_series", parents=[common_parser], help="Run the full WSSS pipeline in series")
     parser_series.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
     parser_series.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
-    parser_series.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="gradcam")
+    parser_series.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam+ccam")
     parser_series.add_argument("--experiment_name", default=None)
-    parser_series.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_gradcam")
+    parser_series.add_argument("--supervision", choices=["full", "weak"], help="Supervision type", default="weak")
     parser_series.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_series.set_defaults(func=handle_train_series)
 
@@ -77,7 +77,7 @@ def main():
     parser_eval = subparsers.add_parser("evaluate", parents=[common_parser], help="Evaluate segmentation model")
     parser_eval.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_eval.add_argument("--checkpoint",required=True, help="Path to model checkpoint")
-    parser_eval.add_argument("--visualize", help="Save visualization images", default=False, action="store_false")
+    parser_eval.add_argument("--visualize", help="Save visualization images", default=True, action="store_false")
     parser_eval.add_argument("--experiment_name", default=None)
     parser_eval.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="gradcam")
     parser_eval.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
@@ -88,11 +88,11 @@ def main():
     parser_all = subparsers.add_parser("run_all", parents=[common_parser], help="Run the full WSSS pipeline")
     parser_all.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
     parser_all.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
-    parser_all.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="gradcam")
+    parser_all.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam+ccam")
     parser_all.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_all.add_argument("--visualize", help="Save visualization images", default=True, action="store_true")
     parser_all.add_argument("--experiment_name", default=None)
-    parser_all.add_argument("--supervision", choices=["full", "weak_gradcam", "weak_cam"], help="Supervision type", default="weak_gradcam")
+    parser_all.add_argument("--supervision", choices=["full", "weak"], help="Supervision type", default="weak")
     parser_all.set_defaults(func=handle_run_all)
 
     # Parse and execute

@@ -179,11 +179,10 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
         return_trimaps = True
         return_pseudomask = False
     elif supervision.startswith('weak'):
-        return_trimaps = True
+        return_trimaps = False
         return_pseudomask = True
     else:
-        return_trimaps = False
-        return_pseudomask = False
+        raise ValueError(f"Invalid supervision type: {supervision}. Expected 'full' or 'weak'.")
     logger.info(f"Return trimaps: {return_trimaps}, Return pseudomask: {return_pseudomask}")
     
     try:
@@ -210,7 +209,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
             split='val',
             batch_size=batch_size,
             return_pseudomask=False,
-            return_trimaps=return_trimaps,
+            return_trimaps=True,
             shuffle=False
         )
         
