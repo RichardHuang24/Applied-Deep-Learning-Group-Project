@@ -4,6 +4,7 @@ from utils.logging import setup_logging
 
 from pathlib import Path
 import time
+import os
 
 def handle_train_classifier(args):
     config = args.config
@@ -13,6 +14,10 @@ def handle_train_classifier(args):
     output_dir = Path(config['paths']['outputs']) / "experiments" / experiment_name
 
     setup_logging(output_dir)
+
+    if (Path(config['paths']['outputs']) / "classifier.pth").exists():
+        print(f"Classifier already exists at {Path(config['paths']['outputs']) / 'classifier.pth'}. Skipping training.")
+        return os.path.join(Path(config['paths']['outputs']), 'classifier.pth'), experiment_name
 
     model_path = train_classifier(
         config=config,

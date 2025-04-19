@@ -36,7 +36,7 @@ def main():
     # --- Generate Masks
     parser_masks = subparsers.add_parser("generate_masks", parents=[common_parser], help="Generate CAM-based pseudo masks")
     parser_masks.add_argument("--config_path", help="Path to the config file", default="config.json")
-    parser_masks.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam+ccam")
+    parser_masks.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam")
     parser_masks.add_argument("--model_path", help="Path to the trained model checkpoint", default=None)
     parser_masks.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
     parser_masks.add_argument("--experiment_name", default=None)
@@ -88,7 +88,7 @@ def main():
     parser_all = subparsers.add_parser("run_all", parents=[common_parser], help="Run the full WSSS pipeline")
     parser_all.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
     parser_all.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
-    parser_all.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam+ccam")
+    parser_all.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam")
     parser_all.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_all.add_argument("--visualize", help="Save visualization images", default=True, action="store_true")
     parser_all.add_argument("--experiment_name", default=None)

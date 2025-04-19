@@ -260,13 +260,15 @@ class CCAMForMask:
             fg_feats, bg_feats, ccam = self.model(image_tensor)
             
             # Get CAM
-            cam = ccam.squeeze().cpu().numpy()
-            
+            cam = ccam.squeeze()
+            # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+            cam = F.relu(cam)
+            # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
             # Normalize CAM (already normalized by sigmoid, but let's ensure ranges)
-            cam = cam - cam.min()
+            # cam = cam - cam.min()
             # cam_max = cam.max()
             # cam /= cam_max + (1e-6)
-            
+            cam = cam.cpu().numpy()
             # Resize if needed
             if orig_size is not None:
                 cam_tensor = torch.tensor(cam, dtype=torch.float32).unsqueeze(0).unsqueeze(0)

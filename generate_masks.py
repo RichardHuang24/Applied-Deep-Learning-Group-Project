@@ -186,7 +186,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     import data
     
     # Get configuration parameters
-    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 20)
+    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 15)
     batch_size = config.get('models', {}).get('ccam', {}).get('batch_size', 32)
     lr = config.get('models', {}).get('ccam', {}).get('lr', 0.0001)
     alpha = config.get('models', {}).get('ccam', {}).get('alpha', 0.05)
@@ -229,7 +229,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     
     # Add supervision loss if initial CAMs are provided
     if initial_cams_dir is not None:
-        criterion.append(SupervisionLoss(high_threshold=0.2, low_threshold=0.025).to(device))
+        criterion.append(SupervisionLoss(high_threshold=0.7, low_threshold=0.2).to(device))
     
     # Get parameter groups for optimizer
     param_groups = ccam_model.get_parameter_groups()
