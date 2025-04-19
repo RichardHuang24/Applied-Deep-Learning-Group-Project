@@ -85,18 +85,25 @@ class GradCAMForMask:
         outputs.backward(gradient=one_hot, retain_graph=True)
 
         # Grad-CAM weights
-        weights = torch.mean(self.gradients, dim=(2, 3), keepdim=True)
+        weights = torch.sum(self.gradients, dim=(2, 3), keepdim=True)
         cam = torch.sum(weights * self.activations, dim=1)  # shape [1, H, W]
 
+        # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+        # print("\n\n")
         if relu:
             cam = F.relu(cam)
+        # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "quantiles", cam.quantile(0.1), cam.quantile(0.3), cam.quantile(0.5), cam.quantile(0.7), cam.quantile(0.9))
+        # print("\n\n")
 
         # Normalize CAM
         cam = cam.squeeze().cpu().numpy()
-        cam -= cam.min()
-        cam_max = cam.max()
-        if cam_max > 0:
-            cam /= cam_max
+        # cam -= cam.min()
+        # cam_max = cam.max()
+        # if cam_max > 0:
+            # cam /= cam_max
+        # cam = (cam - cam.mean()) / cam.std()
+        # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+        # print("\n\n")
 
         # Resize if needed
         if orig_size is not None:
@@ -182,17 +189,17 @@ class CAMForMask:
             
             for i, w in enumerate(class_weights):
                 cam += w * feature_maps[0, i]  # Add weighted activation maps
-            
             # Apply ReLU to focus on positive activations
             cam = F.relu(cam)
             
             # Convert to numpy and normalize
             cam_np = cam.cpu().numpy()
-            cam_np -= cam_np.min()
-            cam_max = cam_np.max()
-            if cam_max > 0:
-                cam_np /= cam_max
-            
+            # cam_np -= cam_np.min()
+            # cam_max = cam_np.max()
+            # if cam_max > 0:
+            #     cam_np /= cam_max
+            # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+            # print("\n\n")
             # Resize if needed
             if orig_size is not None:
                 cam_tensor = torch.tensor(cam_np, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
@@ -256,7 +263,7 @@ class CCAMForMask:
             cam = ccam.squeeze().cpu().numpy()
             
             # Normalize CAM (already normalized by sigmoid, but let's ensure ranges)
-            # cam = cam - cam.min()
+            cam = cam - cam.min()
             # cam_max = cam.max()
             # cam /= cam_max + (1e-6)
             
