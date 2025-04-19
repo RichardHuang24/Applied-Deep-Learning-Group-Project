@@ -89,7 +89,7 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
     # Handle different methods
     if method in ['gradcam', 'cam']:
         return generate_cam_masks(config, method, classifier_path, output_dir, 
-                                 visualize, threshold, args, device)
+                                 visualize, threshold, args, device)[1]
     elif method == 'ccam':
         return generate_ccam_masks(config, None, classifier_path, output_dir, 
                                   visualize, threshold, args, device)
@@ -97,7 +97,7 @@ def generate_masks(config, method='gradcam', classifier_path=None, output_dir=No
         # First, generate initial CAMs
         initial_method = method.split('+')[0]  # 'gradcam' or 'cam'
         initial_cams_dir = generate_cam_masks(config, initial_method, classifier_path, 
-                                             output_dir / "initial", visualize, threshold, args, device)
+                                             output_dir / "initial", visualize, threshold, args, device)[0]
         
         # Then, use these CAMs to train CCAM
         return generate_ccam_masks(config, initial_cams_dir, classifier_path, 
@@ -175,7 +175,7 @@ def generate_cam_masks(config, method, classifier_path, output_dir,
 
     logger.info(f"Generated {method} masks for all images. Saved to {masks_dir}")
     
-    return cams_dir
+    return cams_dir, masks_dir
 
 def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir, 
                        visualize, threshold, args, device):
