@@ -18,6 +18,9 @@ def handle_train_classifier(args):
     if (Path(config['paths']['outputs']) / "classifier.pth").exists():
         print(f"Classifier already exists at {Path(config['paths']['outputs']) / 'classifier.pth'}. Skipping training.")
         return os.path.join(Path(config['paths']['outputs']), 'classifier.pth'), experiment_name
+    if args.cam == "ccam":
+        print("CCAM does not need classifier training. Skipping.")
+        return None, experiment_name
 
     model_path = train_classifier(
         config=config,
