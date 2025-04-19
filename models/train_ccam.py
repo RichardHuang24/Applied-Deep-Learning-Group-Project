@@ -488,13 +488,13 @@ def train_ccam(config, model, train_loader, criterion, optimizer, scheduler, num
             scheduler.step()
         
         # Save checkpoint
-        torch.save({
-            'epoch': epoch + 1,
-            'state_dict': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'scheduler': scheduler.state_dict() if scheduler is not None else None,
-            'invert_cam': invert_cam
-        }, checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pth")
+        # torch.save({
+        #     'epoch': epoch + 1,
+        #     'state_dict': model.state_dict(),
+        #     'optimizer': optimizer.state_dict(),
+        #     'scheduler': scheduler.state_dict() if scheduler is not None else None,
+        #     'invert_cam': invert_cam
+        # }, checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pth")
         
         # Save latest checkpoint (overwrite)
         torch.save({

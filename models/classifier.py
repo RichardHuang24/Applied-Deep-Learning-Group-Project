@@ -21,7 +21,7 @@ class ResNetClassifier(nn.Module):
     - Backbones: ResNet18, ResNet34, ResNet50
     - Initializations: ImageNet, Random, SimCLR
     """
-    def __init__(self, backbone='resnet18', initialization='imagenet', num_classes=37):
+    def __init__(self, backbone='resnet50', initialization='imagenet', num_classes=37):
         super().__init__()
         self.backbone_name = backbone.lower()
         self.initialization = initialization.lower()
@@ -45,10 +45,40 @@ class ResNetClassifier(nn.Module):
 
         # Always load ImageNet weights first for compatibility
         if self.initialization == 'imagenet':
-            return backbones[self.backbone_name](weights='DEFAULT')
+            model = backbones[self.backbone_name](weights='DEFAULT')
         else:
             # Random init or simclr will be handled later
-            return backbones[self.backbone_name](weights=None)
+            model = backbones[self.backbone_name](weights=None)
+        
+        # Modify layer4 to use stride=1 (no downsampling)
+        self._modify_layer4_stride(model)
+        
+        return model
+    
+    def _modify_layer4_stride(self, model):
+        """
+        Modify the stride of the first conv layer in layer4 to be 1 instead of 2
+        This prevents downsampling in layer4
+        """
+        # For ResNet models, change the stride in the first Bottleneck/BasicBlock of layer4
+        if hasattr(model, 'layer4') and len(model.layer4) > 0:
+            # Get the first block of layer4
+            first_block = model.layer4[0]
+            
+            # Modify the stride in the first conv layer (for BasicBlock in ResNet18/34)
+            if hasattr(first_block, 'conv1'):
+                first_block.conv1.stride = (1, 1)
+            
+            # For Bottleneck architecture (ResNet50 and higher)
+            if hasattr(first_block, 'conv2'):
+                first_block.conv2.stride = (1, 1)
+            
+            # Also modify the downsampling layer if it exists
+            if hasattr(first_block, 'downsample') and first_block.downsample is not None:
+                if len(first_block.downsample) > 0:
+                    # The first module in the downsample sequential is usually the conv layer
+                    if isinstance(first_block.downsample[0], nn.Conv2d):
+                        first_block.downsample[0].stride = (1, 1)
 
     def _initialize_weights(self):
         if self.initialization == 'simclr':
@@ -123,7 +153,6 @@ class ResNetClassifier(nn.Module):
         x1 = self.model.layer3(x)
         x2 = self.model.layer4(x1)
         
-        x2 = F.interpolate(x2, size=x1.shape[2:], mode='bilinear', align_corners=False)
         return torch.cat([x2, x1], dim=-3)
 
 class ResNetCAM(ResNetClassifier):
@@ -225,5 +254,4 @@ def create_classifier(config, experiment=None):
     
 
 if __name__ == "__main__":
-    print(ResNetCAM())
     print(ResNetClassifier())

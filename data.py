@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True, return_bbox=False,
                   return_trimaps=False, return_pseudomask=False,
                   label_type="breed", transform=None, transform_trimaps=None,
-                  transform_pseudomasks=None, mask_dir=None):
+                  transform_pseudomasks=None, mask_dir=None, keep_large=False):
     """
     Create data loaders for the dataset
 
@@ -40,7 +40,8 @@ def data_loaders(split='train', batch_size=32, num_workers=4, shuffle=True, retu
                                transform_trimaps=transform_trimaps,
                                transform_pseudomasks=transform_pseudomasks,
                                mask_dir=mask_dir,
-                               label_type=label_type)
+                               label_type=label_type,
+                               keep_large=keep_large)
     print(f"Loaded {len(dataset)} samples for split={split}")
 
     return DataLoader(
@@ -60,6 +61,13 @@ def get_base_transform_img():
     ])
 
     return val_transform
+
+def get_large_transform_img():
+    return transforms.Compose([
+        transforms.Resize((448, 448)),  # Resize all images to 224x224
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet stats
+    ])
 
 def get_base_transform_label():
     return transforms.Compose([
@@ -108,7 +116,7 @@ class OxfordPetDataset(Dataset):
     def __init__(self, root="dataset", split="trainval", transform=None,
                  return_bbox=False, label_type="breed",
                  return_trimaps=False, transform_trimaps=None,
-                 return_pseudomask=False, transform_pseudomasks=None, mask_dir=None):
+                 return_pseudomask=False, transform_pseudomasks=None, mask_dir=None, keep_large=False):
         self.root = root
         self.split = split
         self.image_dir = os.path.join(root, "images")
@@ -116,13 +124,18 @@ class OxfordPetDataset(Dataset):
         self.trimaps_dir = os.path.join(self.annotation_dir, "trimaps")
         self.pseudomask_dir = mask_dir
         self.xml_dir = os.path.join(self.annotation_dir, "xmls")
+        self.keep_large = keep_large
         
         self.base_transform_img = get_base_transform_img()
         self.base_transform_label = get_base_transform_label()
-
+        if self.keep_large:
+            self.base_transform_img = get_large_transform_img()
+            
+        
         self.return_trimaps = return_trimaps
         self.return_pseudomask = return_pseudomask
         assert not (self.return_trimaps and self.return_pseudomask), "Cannot return both trimaps and pseudomasks at the same time."
+        assert not (self.keep_large and self.return_trimaps) and not (self.keep_large and self.return_pseudomask), "Cannot return both trimaps/pseudomasks and keep large images at the same time." 
         self.label_type = label_type
         
         if self.return_trimaps and self.trimaps_dir is None:

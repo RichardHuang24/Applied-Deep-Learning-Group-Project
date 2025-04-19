@@ -231,12 +231,6 @@ class CCAMForMask:
         """
         self.model = model
         self.model.eval()
-        
-    def check_positive(am):
-        am[am > 0.5] = 1
-        am[am <= 0.5] = 0
-        edge_mean = (am[0, 0, 0, :].mean() + am[0, 0, :, 0].mean() + am[0, 0, -1, :].mean() + am[0, 0, :, -1].mean()) / 4
-        return edge_mean > 0.5
     
     def generate_mask(self, image_tensor, target_class=None, orig_size=None, threshold=0.4, relu=True):
         """
@@ -261,15 +255,10 @@ class CCAMForMask:
             # Get CAM
             cam = ccam.squeeze().cpu().numpy()
             
-            if self.check_positive(ccam):
-                print(f"WARNING: Reversing CCAM.")
-                ccam = 1 - ccam
-            
             # Normalize CAM (already normalized by sigmoid, but let's ensure ranges)
             # cam = cam - cam.min()
-            cam_max = cam.max()
-            if cam_max > 0:
-                cam /= cam_max
+            # cam_max = cam.max()
+            # cam /= cam_max + (1e-6)
             
             # Resize if needed
             if orig_size is not None:

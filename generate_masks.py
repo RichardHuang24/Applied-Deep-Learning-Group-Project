@@ -24,6 +24,31 @@ from models.train_ccam import train_ccam, CCamModel
 
 logger = logging.getLogger(__name__)
 
+
+class PolyOptimizer(torch.optim.SGD):
+
+    def __init__(self, params, lr, weight_decay, max_step, momentum=0.9):
+        super().__init__(params, lr, weight_decay)
+
+        self.global_step = 0
+        self.max_step = max_step
+        self.momentum = momentum
+
+        self.__initial_lr = [group['lr'] for group in self.param_groups]
+
+
+    def step(self, closure=None):
+
+        if self.global_step < self.max_step:
+            lr_mult = (1 - self.global_step / self.max_step) ** self.momentum
+
+            for i in range(len(self.param_groups)):
+                self.param_groups[i]['lr'] = self.__initial_lr[i] * lr_mult
+
+        super().step(closure)
+
+        self.global_step += 1
+
 def generate_masks(config, method='gradcam', classifier_path=None, output_dir=None,
                   visualize=False, threshold=0.4, args=None):
     """
@@ -103,7 +128,7 @@ def generate_cam_masks(config, method, classifier_path, output_dir,
 
     # Create dataloaders
     import data
-    all_dataloader = data.data_loaders(split='trainval', batch_size=1, shuffle=False)
+    all_dataloader = data.data_loaders(split='trainval', batch_size=1, shuffle=False, keep_large=True)
     
     # Create output directories
     masks_dir = output_dir / "masks"
@@ -128,7 +153,7 @@ def generate_cam_masks(config, method, classifier_path, output_dir,
             cam, binary_mask = cam_model.generate_mask(
                 image.to(device),
                 target_class=label,
-                orig_size=(224, 224),  # or actual image size if needed
+                orig_size=(448, 448),  # or actual image size if needed
                 threshold=threshold
             )
 
@@ -161,7 +186,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     import data
     
     # Get configuration parameters
-    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 25)
+    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 20)
     batch_size = config.get('models', {}).get('ccam', {}).get('batch_size', 32)
     lr = config.get('models', {}).get('ccam', {}).get('lr', 0.0001)
     alpha = config.get('models', {}).get('ccam', {}).get('alpha', 0.05)
@@ -204,21 +229,22 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     
     # Add supervision loss if initial CAMs are provided
     if initial_cams_dir is not None:
-        criterion.append(SupervisionLoss(high_threshold=0.6, low_threshold=0.05).to(device))
+        criterion.append(SupervisionLoss(high_threshold=0.2, low_threshold=0.025).to(device))
     
     # Get parameter groups for optimizer
     param_groups = ccam_model.get_parameter_groups()
     
     # Create scheduler
     train_loader = data.data_loaders(split='trainval', batch_size=batch_size, shuffle=True)
+    num_steps = len(train_loader) * num_epochs
     
     # Create optimizer
-    optimizer = optim.Adam([
+    optimizer = PolyOptimizer([
         {'params': param_groups[0], 'lr': lr, 'weight_decay': 0.0001},  # Backbone
         {'params': param_groups[1], 'lr': 2 * lr, 'weight_decay': 0},   # Backbone biases
         {'params': param_groups[2], 'lr': 10 * lr, 'weight_decay': 0.0001},  # Disentangler
         {'params': param_groups[3], 'lr': 20 * lr, 'weight_decay': 0}   # Disentangler biases
-    ], lr=lr, weight_decay=0.0001)
+    ], lr=lr, weight_decay=0.0001, max_step=num_steps)
     
     # Train CCAM
     logger.info(f"Training CCAM for {num_epochs} epochs with batch size {batch_size}")
@@ -239,7 +265,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     cam_model = CCAMForMask(trained_model)
     
     # Create dataloaders for final mask generation
-    all_dataloader = data.data_loaders(split='trainval', batch_size=1, shuffle=False)
+    all_dataloader = data.data_loaders(split='trainval', batch_size=1, shuffle=False, keep_large=True)
     
     # Create output directories for final masks
     masks_dir = output_dir / "masks"
@@ -265,7 +291,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
             cam, binary_mask = cam_model.generate_mask(
                 image.to(device),
                 target_class=None,  # CCAM is class-agnostic
-                orig_size=(224, 224),
+                orig_size=(448, 448),
                 threshold=threshold
             )
             

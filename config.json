@@ -33,7 +33,7 @@
     "cam": {
       "methods": ["gradcam", "ccam"],
       "default_method": "ccam",
-      "threshold": 0.4
+      "threshold": 0.1
     },
     "pspnet": {
       "backbone": "resnet50",
