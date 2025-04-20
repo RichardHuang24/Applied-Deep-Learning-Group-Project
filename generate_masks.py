@@ -178,11 +178,11 @@ def generate_cam_masks(config, method, classifier_path, output_dir,
     return cams_dir, masks_dir
 
 
-def check_positive(am):
-    am[am > 0.5] = 1
-    am[am <= 0.5] = 0
+def check_positive(am, threshold):
+    am[am > threshold] = 1
+    am[am <= threshold] = 0
     edge_mean = (am[0, :].mean() + am[:, 0].mean() + am[-1, :].mean() + am[:, -1].mean()) / 4
-    return edge_mean > 0.5
+    return edge_mean > threshold
 
 
 def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir, 
@@ -208,26 +208,26 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     ).to(device)
     
     # Initialize from classifier if provided
-    if classifier_path and initial_cams_dir is not None:  # For 'gradcam+ccam' or 'cam+ccam'
-        # Load classifier weights to initialize backbone
-        classifier_dict = torch.load(classifier_path, map_location=device)
-        if 'state_dict' in classifier_dict:
-            classifier_dict = classifier_dict['state_dict']
+    # if classifier_path and initial_cams_dir is not None:  # For 'gradcam+ccam' or 'cam+ccam'
+    #     # Load classifier weights to initialize backbone
+    #     classifier_dict = torch.load(classifier_path, map_location=device)
+    #     if 'state_dict' in classifier_dict:
+    #         classifier_dict = classifier_dict['state_dict']
             
-        # Filter backbone keys and map to CCAM model structure
-        backbone_dict = {}
-        for k, v in classifier_dict.items():
-            if k.startswith('model.'):
-                # Map classifier's model.X to CCAM's backbone.X
-                new_key = k.replace('model.', 'backbone.model.')
-                backbone_dict[new_key] = v
+    #     # Filter backbone keys and map to CCAM model structure
+    #     backbone_dict = {}
+    #     for k, v in classifier_dict.items():
+    #         if k.startswith('model.'):
+    #             # Map classifier's model.X to CCAM's backbone.X
+    #             new_key = k.replace('model.', 'backbone.model.')
+    #             backbone_dict[new_key] = v
         
-        # Load backbone weights
-        missing, unexpected = ccam_model.load_state_dict(backbone_dict, strict=False)
-        logger.info(f"Initialized CCAM backbone from classifier")
-        logger.info(f"Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}")
-        print(f"Missing keys: {missing}")
-        print(f"Unexpected keys: {unexpected}")
+    #     # Load backbone weights
+    #     missing, unexpected = ccam_model.load_state_dict(backbone_dict, strict=False)
+    #     logger.info(f"Initialized CCAM backbone from classifier")
+    #     logger.info(f"Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}")
+    #     print(f"Missing keys: {missing}")
+    #     print(f"Unexpected keys: {unexpected}")
     
     # Create loss functions
     criterion = [
@@ -238,7 +238,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     
     # Add supervision loss if initial CAMs are provided
     if initial_cams_dir is not None:
-        criterion.append(SupervisionLoss(high_threshold=0.6, low_threshold=0.2).to(device))
+        criterion.append(SupervisionLoss(high_threshold=0.7, low_threshold=0.2).to(device))
     
     # Get parameter groups for optimizer
     param_groups = ccam_model.get_parameter_groups()
@@ -306,7 +306,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
             )
             
             if flag is None:
-                flag = check_positive(cam)
+                flag = check_positive(cam, threshold)
                 if flag:
                     print("reverting masks")
             if flag:

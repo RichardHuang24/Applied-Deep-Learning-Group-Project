@@ -97,7 +97,7 @@ def handle_generate_masks(args, model_path=None):
     
     if model_path:
         model_path = Path(model_path)
-    elif args.model_path:
+    elif hasattr(args, 'model_path') and args.model_path:
         model_path = Path(args.model_path)
     
     if args.cam != 'ccam' and model_path is not None and not model_path.exists():
