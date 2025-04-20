@@ -454,7 +454,7 @@ def train_ccam(config, model, train_loader, criterion, optimizer, scheduler, num
             loss_sup = torch.tensor(0.0, device=device)
             if initial_cams is not None and len(criterion) > 3:
                 loss_sup = criterion[3](ccam, initial_cams)
-                loss += loss_sup
+                loss += loss_sup * 0.5
             
             # Backward pass and update
             loss.backward()
