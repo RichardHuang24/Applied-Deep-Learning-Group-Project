@@ -1,16 +1,19 @@
 # 🐾 WSSS Framework
 
-A **Weakly-Supervised Semantic Segmentation** framework for training and evaluating segmentation models using CAM-based pseudo-labels and partial supervision.
+A **Weakly-Supervised Semantic Segmentation** framework for training and evaluating segmentation models using CAM-based pseudo-labels and partial or full supervision.
+
+---
 
 ## 📌 Overview
 
-This framework implements a full pipeline for Weakly-Supervised Semantic Segmentation:
+This framework implements a modular pipeline for weakly-supervised semantic segmentation using the Oxford-IIIT Pet dataset. It supports:
+- Training classifiers with various backbones and initialization types
+- Generating Class Activation Maps (CAMs)
+- Converting CAMs to pseudo segmentation masks
+- Training segmentation models using weak or full supervision
+- Evaluation and result aggregation
 
-1. Training an image classifier with various backbones and initialization methods.
-2. Generating Class Activation Maps (CAMs) using different techniques (e.g., GradCAM, CAM).
-3. Creating pseudo-masks from the activation maps.
-4. Training a segmentation model using the pseudo-masks or full masks.
-5. Evaluating the segmentation performance with standard metrics.
+All components are accessible via command-line interfaces in `main.py`.
 
 ---
 
@@ -58,13 +61,14 @@ python main.py download
 
 ## 🚀 Running Experiments
 
-### 🔹 Step 1: Train Image Classifier
+All commands below are available via `main.py`. You can run individual steps or the entire pipeline.
+
+---
+
+### 🔹 Step 1: Train a Classifier
 
 ```bash
-python main.py train_classifier \
-    --backbone resnet50 \
-    --init imagenet \
-    --cam gradcam 
+python main.py train_classifier     --backbone resnet50     --init imagenet     --cam gradcam     --experiment_name example_exp
 ```
 
 ---
@@ -72,21 +76,15 @@ python main.py train_classifier \
 ### 🔹 Step 2: Generate CAM-based Pseudo Masks
 
 ```bash
-python main.py generate_masks \
-    --cam gradcam \
-    --backbone resnet50 \
-    --init imagenet 
+python main.py generate_masks     --backbone resnet50     --init imagenet     --cam cam+ccam     --model_path path/to/classifier.pth     --experiment_name example_exp
 ```
 
 ---
 
-### 🔹 Step 3: Train Segmentation Model
+### 🔹 Step 3: Train the Segmentation Model
 
 ```bash
-python main.py train_segmentation \
-    --supervision weak_gradcam \
-    --cam gradcam \
-    --init imagenet 
+python main.py train_segmentation     --supervision weak_gradcam     --init imagenet     --cam gradcam     --experiment_name example_exp
 ```
 
 ---
@@ -94,44 +92,34 @@ python main.py train_segmentation \
 ### 🔹 Step 4: Evaluate Segmentation Performance
 
 ```bash
-python main.py evaluate \
-    --supervision weak_gradcam \
-    --cam gradcam \
-    --init imagenet 
+python main.py evaluate     --supervision weak_gradcam     --init imagenet     --cam gradcam     --experiment_name example_exp
 ```
 
 ---
 
-### 🔹 Optional Step: Train Classifier and Generate Masks (in one command)
+### 🔹 Combined Step: Train Classifier + Generate CAM Masks
 
 ```bash
-python main.py train_and_generate \
-    --init imagenet \
-    --cam gradcam 
+python main.py train_and_generate     --backbone resnet50     --init imagenet     --cam gradcam+ccam     --experiment_name example_exp
 ```
 
 ---
 
-### Run All Experiments
-
-To run all experiment combinations with a specific configuration:
+### 🔹 Run Full Pipeline
 
 ```bash
-python main.py run_all \
-    --init imagenet \
-    --cam gradcam \
-    --supervision weak_gradcam
+python main.py run_all     --backbone resnet50     --init imagenet     --cam gradcam+ccam     --supervision weak_gradcam     --experiment_name example_exp
 ```
 
 ---
 
 ## ⚙️ Customization Options
 
-| Option        | Values                          | Description                                |
-|---------------|----------------------------------|--------------------------------------------|
-| `--init`      | `random`, `simclr`, `imagenet`   | Initialization method                      |
-| `--cam`       | `gradcam`, `cam`                 | CAM method                                 |
-| `--supervision` | `weak_gradcam`, `weak_cam`, `full` | Type of supervision                       |
+| Option         | Values                                             | Description                      |
+|----------------|-----------------------------------------------------|----------------------------------|
+| `--init`       | `random`, `simclr`, `imagenet`                     | Initialization method            |
+| `--cam`        | `gradcam`, `cam`, `ccam`, `gradcam+ccam`, `cam+ccam` | CAM methods                      |
+| `--supervision`| `full`, `weak_gradcam`, `weak_cam`                 | Supervision type                 |
 
 ---
 
@@ -146,21 +134,17 @@ For each experiment, the following outputs are generated:
 5. **Evaluation Results**: mIoU and pixel accuracy scores
 6. **Experiment Summary**: Visual and JSON summary
 
-#### Output Directory Structure:
+## 📦 Output Structure
 
 ```
-experiments/
-└── resnet50_imagenet_gradcam_20230415_120000/
+outputs/
+└── example_exp/
     ├── classifier/
-    ├── cam_model/
     ├── masks/
-    │   └── visualizations/
     ├── segmentation/
     ├── evaluation/
     ├── experiment_config.json
-    ├── results.json
-    ├── experiment_summary.png
-    └── experiment.log
+    └── results.json
 ```
 
 ---
@@ -179,29 +163,38 @@ All results are automatically saved to `outputs/experiments.log`.
 ## 📂 Project Structure
 
 ```
-├── main.py                  # Main runner
-├── train.py                 # Training pipeline
-├── generate_masks.py        # CAM mask generation
-├── evaluate.py              # Evaluation utilities
-├── utils/                   # Utility functions
-│   └── download.py          # Dataset utils
+├── main.py
+├── train.py
+├── generate_masks.py
+├── evaluate.py
+├── data.py
+
+├── handlers/
+│   ├── classifier.py
+│   ├── segmentation.py
+│   ├── masks.py
+│   └── evaluate.py
+
 ├── models/
-│   ├── classifier/          # ResNet-based classifiers
-│   ├── cam/                 # CAM methods: GradCAM, CAM
-│   └── segmentation/        # PSPNet (semantic segmentation)
-├── data/                    # Dataset handling
-├── config.json              # Default experiment configuration
-└── requirements.txt         # Dependencies
+│   ├── classifier.py
+│   ├── cam.py
+│   └── pspnet.py
+
+├── utils/
+│   ├── download.py
+│   ├── metrics.py
+│   ├── visualization.py
+│   └── logging.py
+
+├── config.json
+├── requirements.txt
+└── README.md
 ```
+
 
 ---
 
-## 📜 Citing
-
-If you use this framework in your research or coursework, please cite this repository:
+## 📜 Citation
 
 > GitHub: [RichardHuang24/Applied-Deep-Learning-Group-Project](https://github.com/RichardHuang24/Applied-Deep-Learning-Group-Project)
 
----
-
-Happy segmenting! 🎯
