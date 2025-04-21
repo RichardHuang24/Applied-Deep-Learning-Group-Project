@@ -22,9 +22,7 @@ This framework implements a full pipeline for Weakly-Supervised Semantic Segment
 - PyTorch 1.7+
 - CUDA (recommended for faster training)
 - **Additional dependencies**:  
-  - `torch`  
   - `tqdm`  
-  - `Pillow`
 
 ---
 
@@ -42,12 +40,6 @@ cd Applied-Deep-Learning-Group-Project
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-#### Install dependencies
-
-```bash
-pip install -r requirements.txt
 ```
 
 ---
@@ -93,9 +85,7 @@ python main.py generate_masks \
 ```bash
 python main.py train_segmentation \
     --supervision weak_gradcam \
-    --pseudo_masks_dir ./experiments/example_run/masks/ \
     --cam gradcam \
-    --backbone resnet50 \
     --init imagenet 
 ```
 
