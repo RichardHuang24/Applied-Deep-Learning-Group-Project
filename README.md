@@ -7,7 +7,7 @@ A **Weakly-Supervised Semantic Segmentation** framework for training and evaluat
 ## 📌 Overview
 
 This framework implements a modular pipeline for weakly-supervised semantic segmentation using the Oxford-IIIT Pet dataset. It supports:
-- Training classifiers with various backbones and initialization types
+- Training classifiers with various initialization types and CAM methods.
 - Generating Class Activation Maps (CAMs)
 - Converting CAMs to pseudo segmentation masks
 - Training segmentation models using weak or full supervision
@@ -136,7 +136,7 @@ python main.py run_all \
 | Option         | Values                                             | Description                      |
 |----------------|-----------------------------------------------------|----------------------------------|
 | `--init`       | `random`, `mocov2`, `imagenet`                     | Initialization method            |
-| `--cam`        | `gradcam`, `cam`, `ccam`, `gradcam+ccam`, `cam+ccam` | CAM methods                      |
+| `--cam`        | `gradcam`, `cam`, `gradcam+ccam`, `cam+ccam`       | CAM methods                      |
 | `--supervision`| `full`, `weak_gradcam`, `weak_cam`                 | Supervision type                 |
 
 ---
@@ -160,9 +160,7 @@ outputs/
     ├── classifier/
     ├── masks/
     ├── segmentation/
-    ├── evaluation/
-    ├── experiment_config.json
-    └── results.json
+    └── experiment_config.json
 ```
 
 ---
