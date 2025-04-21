@@ -156,11 +156,14 @@ For each experiment, the following outputs are generated:
 
 ```
 outputs/
-└── example_exp/
-    ├── classifier/
-    ├── masks/
-    ├── segmentation/
-    └── experiment_config.json
+└── experiments/
+    └── example_exp/
+        ├── masks/
+        │   ├── cams/              # CAM heatmaps for each image
+        │   └── masks/             # Pseudo segmentation masks generated from CAMs
+        ├── best_model.pth         # Trained classifier 
+        ├── segmentation_best.pth  # Best segmentation model weights
+        └── experiment.log         # Full log of training and evaluation 
 ```
 
 ---
