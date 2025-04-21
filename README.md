@@ -61,6 +61,10 @@ python main.py download
 
 ## 🚀 Running Experiments
 
+**Note**: This framework uses `ResNet-50` as the default and only backbone for all classification models.
+
+**Full Supervision**: For full supervision mode (`--supervision full`), the segmentation model is trained using ground-truth pixel masks without relying on CAM-generated pseudo-labels.
+
 All commands below are available via `main.py`. You can run individual steps or the entire pipeline.
 
 ---
@@ -68,7 +72,7 @@ All commands below are available via `main.py`. You can run individual steps or 
 ### 🔹 Step 1: Train a Classifier
 
 ```bash
-python main.py train_classifier     --backbone resnet50     --init imagenet     --cam gradcam     --experiment_name example_exp
+python main.py train_classifier        --init imagenet     --cam gradcam     --experiment_name example_exp
 ```
 
 ---
@@ -76,7 +80,7 @@ python main.py train_classifier     --backbone resnet50     --init imagenet     
 ### 🔹 Step 2: Generate CAM-based Pseudo Masks
 
 ```bash
-python main.py generate_masks     --backbone resnet50     --init imagenet     --cam cam+ccam     --model_path path/to/classifier.pth     --experiment_name example_exp
+python main.py generate_masks          --init imagenet     --cam cam+ccam       --experiment_name example_exp
 ```
 
 ---
@@ -100,16 +104,30 @@ python main.py evaluate     --supervision weak_gradcam     --init imagenet     -
 ### 🔹 Combined Step: Train Classifier + Generate CAM Masks
 
 ```bash
-python main.py train_and_generate     --backbone resnet50     --init imagenet     --cam gradcam+ccam     --experiment_name example_exp
+python main.py train_and_generate      --init imagenet     --cam gradcam+ccam     --experiment_name example_exp
 ```
 
 ---
 
 ### 🔹 Run Full Pipeline
 
+**🔸 Weakly-Supervised Example (GradCAM):**
 ```bash
-python main.py run_all     --backbone resnet50     --init imagenet     --cam gradcam+ccam     --supervision weak_gradcam     --experiment_name example_exp
+python main.py run_all \
+    --init imagenet \
+    --cam gradcam \
+    --supervision weak_gradcam \
+    --experiment_name example_exp
 ```
+
+**🔸 Fully-Supervised Example (Ground Truth Masks):**
+```bash
+python main.py run_all \
+    --init imagenet \
+    --supervision full \
+    --experiment_name full_supervision_exp
+```
+
 
 ---
 
@@ -117,7 +135,7 @@ python main.py run_all     --backbone resnet50     --init imagenet     --cam gra
 
 | Option         | Values                                             | Description                      |
 |----------------|-----------------------------------------------------|----------------------------------|
-| `--init`       | `random`, `simclr`, `imagenet`                     | Initialization method            |
+| `--init`       | `random`, `mocov2`, `imagenet`                     | Initialization method            |
 | `--cam`        | `gradcam`, `cam`, `ccam`, `gradcam+ccam`, `cam+ccam` | CAM methods                      |
 | `--supervision`| `full`, `weak_gradcam`, `weak_cam`                 | Supervision type                 |
 
@@ -156,7 +174,6 @@ The framework evaluates segmentation performance using:
 - **Pixel Accuracy**: Percentage of correctly classified pixels.
 - **Mean IoU (mIoU)**: Average Intersection over Union across all classes.
 
-All results are automatically saved to `outputs/experiments.log`.
 
 ---
 
