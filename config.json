@@ -18,7 +18,7 @@
       "pspnet": 0.0005
     },
     "weight_decay": 1e-4,
-    "num_epochs": 25,
+    "num_epochs": 50,
     "learning_rate": 5e-4
   },
   "models": {
