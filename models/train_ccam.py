@@ -266,9 +266,9 @@ class SimMaxLoss(nn.Module):
 class SupervisionLoss(nn.Module):
     """
     Supervised segmentation loss using initial CAM as guidance
-    Uses cross-entropy loss on high-confidence regions (>0.6 as foreground, <0.05 as background)
+    Uses cross-entropy loss on high-confidence regions (>0.8 as foreground, <0.1 as background)
     """
-    def __init__(self, high_threshold=0.6, low_threshold=0.05):
+    def __init__(self, high_threshold=0.8, low_threshold=0.1):
         super(SupervisionLoss, self).__init__()
         self.high_threshold = high_threshold
         self.low_threshold = low_threshold
@@ -454,7 +454,7 @@ def train_ccam(config, model, train_loader, criterion, optimizer, scheduler, num
             loss_sup = torch.tensor(0.0, device=device)
             if initial_cams is not None and len(criterion) > 3:
                 loss_sup = criterion[3](ccam, initial_cams)
-                loss += loss_sup
+                loss += loss_sup * 0.5
             
             # Backward pass and update
             loss.backward()

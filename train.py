@@ -220,7 +220,7 @@ def train_segmentation(config, supervision='full', experiment_name=None, pseudo_
             lr=learning_rate,
             weight_decay=weight_decay
         )
-        scheduler = scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
         
         # Training loop
         best_miou = 0.0

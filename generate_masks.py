@@ -182,7 +182,7 @@ def check_positive(am, threshold):
     am[am > threshold] = 1
     am[am <= threshold] = 0
     edge_mean = (am[0, :].mean() + am[:, 0].mean() + am[-1, :].mean() + am[:, -1].mean()) / 4
-    return edge_mean > threshold
+    return edge_mean > 0.5
 
 
 def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir, 
@@ -194,12 +194,13 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     import data
     
     # Get configuration parameters
-    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 20)
+    num_epochs = config.get('models', {}).get('ccam', {}).get('epochs', 25)
     batch_size = config.get('models', {}).get('ccam', {}).get('batch_size', 32)
     lr = config.get('models', {}).get('ccam', {}).get('lr', 0.0001)
     alpha = config.get('models', {}).get('ccam', {}).get('alpha', 0.05)
     num_classes = config['dataset']['num_classes']
-    threshold = config.get('models', {}).get('cam', {}).get('threshold', 0.3)
+    threshold = 0.8 if args.init == 'random' else 0.5
+    print(f"Using CCAM threshold: {threshold}")
     
     # Create CCAM model
     ccam_model = CCamModel(
@@ -208,26 +209,26 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     ).to(device)
     
     # Initialize from classifier if provided
-    # if classifier_path and initial_cams_dir is not None:  # For 'gradcam+ccam' or 'cam+ccam'
-    #     # Load classifier weights to initialize backbone
-    #     classifier_dict = torch.load(classifier_path, map_location=device)
-    #     if 'state_dict' in classifier_dict:
-    #         classifier_dict = classifier_dict['state_dict']
+    if classifier_path and initial_cams_dir is not None and args.init == 'random':  # For 'gradcam+ccam' or 'cam+ccam'
+        # Load classifier weights to initialize backbone
+        classifier_dict = torch.load(classifier_path, map_location=device)
+        if 'state_dict' in classifier_dict:
+            classifier_dict = classifier_dict['state_dict']
             
-    #     # Filter backbone keys and map to CCAM model structure
-    #     backbone_dict = {}
-    #     for k, v in classifier_dict.items():
-    #         if k.startswith('model.'):
-    #             # Map classifier's model.X to CCAM's backbone.X
-    #             new_key = k.replace('model.', 'backbone.model.')
-    #             backbone_dict[new_key] = v
+        # Filter backbone keys and map to CCAM model structure
+        backbone_dict = {}
+        for k, v in classifier_dict.items():
+            if k.startswith('model.'):
+                # Map classifier's model.X to CCAM's backbone.X
+                new_key = k.replace('model.', 'backbone.model.')
+                backbone_dict[new_key] = v
         
-    #     # Load backbone weights
-    #     missing, unexpected = ccam_model.load_state_dict(backbone_dict, strict=False)
-    #     logger.info(f"Initialized CCAM backbone from classifier")
-    #     logger.info(f"Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}")
-    #     print(f"Missing keys: {missing}")
-    #     print(f"Unexpected keys: {unexpected}")
+        # Load backbone weights
+        missing, unexpected = ccam_model.load_state_dict(backbone_dict, strict=False)
+        logger.info(f"Initialized CCAM backbone from classifier")
+        logger.info(f"Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}")
+        print(f"Missing keys: {missing}")
+        print(f"Unexpected keys: {unexpected}")
     
     # Create loss functions
     criterion = [
@@ -238,7 +239,7 @@ def generate_ccam_masks(config, initial_cams_dir, classifier_path, output_dir,
     
     # Add supervision loss if initial CAMs are provided
     if initial_cams_dir is not None:
-        criterion.append(SupervisionLoss(high_threshold=0.7, low_threshold=0.2).to(device))
+        criterion.append(SupervisionLoss(high_threshold=0.8, low_threshold=0.1).to(device))
     
     # Get parameter groups for optimizer
     param_groups = ccam_model.get_parameter_groups()

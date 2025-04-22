@@ -28,7 +28,7 @@ def main():
     parser_classifier = subparsers.add_parser("train_classifier", parents=[common_parser], help="Train image classifier")
     parser_classifier.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_classifier.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
-    parser_classifier.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
+    parser_classifier.add_argument("--init", help="Initialization method for the classifier", default="mocov2")
     parser_classifier.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="gradcam")
     parser_classifier.add_argument("--experiment_name", default=None)
     parser_classifier.set_defaults(func=handle_train_classifier)
@@ -48,17 +48,17 @@ def main():
     parser_combo.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
     parser_combo.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
     parser_combo.add_argument("--config_path", help="Path to the config file", default="config.json")
-    parser_combo.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam+ccam")
+    parser_combo.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam")
     parser_combo.add_argument("--experiment_name", default=None)
     parser_combo.set_defaults(func=handle_train_and_generate_masks)
 
     # --- Train Segmentation
     parser_segmentation = subparsers.add_parser("train_segmentation", parents=[common_parser], help="Train segmentation model")
     parser_segmentation.add_argument("--config_path", help="Path to the config file", default="config.json")
-    parser_segmentation.add_argument("--supervision", choices=["full", "weak"], help="Supervision type", default="weak")
+    parser_segmentation.add_argument("--supervision", choices=["full", "weak"], help="Supervision type", default="full")
     parser_segmentation.add_argument("--pseudo_masks_dir", default=None, help="Directory containing pseudo masks")
     parser_segmentation.add_argument("--experiment_name", default=None)
-    parser_segmentation.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
+    parser_segmentation.add_argument("--init", help="Initialization method for the classifier", default="random")
     parser_segmentation.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="gradcam")
     parser_segmentation.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
     parser_segmentation.set_defaults(func=handle_train_segmentation)
@@ -81,13 +81,13 @@ def main():
     parser_eval.add_argument("--experiment_name", default=None)
     parser_eval.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="gradcam")
     parser_eval.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
-    parser_eval.add_argument("--init", choices=["random", "imagenet"], help="Initialization method for the classifier", default="imagenet")
+    parser_eval.add_argument("--init", choices=["random", "imagenet"], help="Initialization method for the classifier", default="random")
     parser_eval.set_defaults(func=handle_evaluate)
 
     # --- Run All
     parser_all = subparsers.add_parser("run_all", parents=[common_parser], help="Run the full WSSS pipeline")
     parser_all.add_argument("--backbone", help="Backbone model for the classifier", default="resnet50")
-    parser_all.add_argument("--init", help="Initialization method for the classifier", default="imagenet")
+    parser_all.add_argument("--init", help="Initialization method for the classifier", choices=["random", "mocov2", "imagenet"], default="random")
     parser_all.add_argument("--cam", choices=["gradcam", "cam", "gradcam+ccam", "cam+ccam", "ccam"], help="CAM method to use", default="cam")
     parser_all.add_argument("--config_path", help="Path to the config file", default="config.json")
     parser_all.add_argument("--visualize", help="Save visualization images", default=True, action="store_true")
@@ -99,10 +99,10 @@ def main():
     args = parser.parse_args()
     with open(args.config_path, 'r') as f:
         args.config = json.load(f)
+    set_seed(args.config["training"]["seed"])
     
     args.func(args)
     # Set seed for reproducibility
-    set_seed(args.config["training"]["seed"])
 
 def set_seed(seed=42):
     """

@@ -33,9 +33,9 @@ class GradCAMForMask:
         # Automatically find the last conv layer if not specified
         if target_layer is None:
             if hasattr(model, 'model'):  # Custom wrapper case
-                target_layer = model.model.layer4[-1]
+                target_layer = model.model.layer4[-2]
             else:
-                target_layer = model.layer4[-1]
+                target_layer = model.layer4[-2]
 
         # Register hooks
         self.hooks.append(target_layer.register_forward_hook(self._forward_hook))

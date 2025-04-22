@@ -206,7 +206,17 @@ class ResNetCAM(ResNetClassifier):
         Returns:
             Tensor: Feature maps from the last conv layer
         """
-        return self.get_features(x)
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x1 = self.model.layer3(x)
+        x2 = self.model.layer4(x1)
+        
+        return x2  # Return the feature maps from the last conv layer
 
 
 def create_classifier(config, experiment=None):
