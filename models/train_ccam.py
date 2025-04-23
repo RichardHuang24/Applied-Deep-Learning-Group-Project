@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Training functions for CCAM (Contrastive learning of Class-agnostic Activation Map)
 """

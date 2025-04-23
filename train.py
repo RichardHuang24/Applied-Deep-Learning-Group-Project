@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Training functions for all models (classifier, CAM, segmentation)
 """

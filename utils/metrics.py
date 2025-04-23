@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Evaluation metrics for semantic segmentation implemented in PyTorch
 """

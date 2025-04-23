@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 oxford_pet_setup.py
 ───────────────────
@@ -6,8 +7,6 @@ Download, extract and prepare the Oxford‑IIIT Pet data set.
 Key upgrade: the `create_train_val_split` routine now performs a
 **stratified split**, so each of the 37 breeds keeps ≈ 80 % of its
 images for training and 20 % for validation.
-
-Author: you
 """
 from __future__ import annotations
 import os, tarfile, urllib.request, random, logging

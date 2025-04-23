@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 PSPNet (Pyramid Scene Parsing Network) implementation
 for semantic segmentation

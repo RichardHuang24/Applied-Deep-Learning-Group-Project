@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 ResNet classifier models with different backbones and initialization options
 """

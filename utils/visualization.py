@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Simple visualisation helpers for weakly‑supervised segmentation.
 The file avoids modern Python syntax that might not be available on

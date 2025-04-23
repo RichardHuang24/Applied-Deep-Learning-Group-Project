@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 import logging
 from pathlib import Path
 

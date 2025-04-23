@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 import os
 import subprocess
 from itertools import product

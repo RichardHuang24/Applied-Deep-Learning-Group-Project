@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Generate pseudo masks from classifier models using CAM methods and CCAM
 """

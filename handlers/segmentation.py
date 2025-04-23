@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 import logging
 from pathlib import Path
 from train import train_segmentation # Assuming train.py is in the parent directory or PYTHONPATH is set

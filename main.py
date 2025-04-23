@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 import argparse
 from handlers.classifier import handle_train_classifier
 from handlers.masks import handle_generate_masks
