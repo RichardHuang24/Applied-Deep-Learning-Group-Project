@@ -1,15 +1,14 @@
-# 🐾 WSSS Framework
-
-A **Weakly-Supervised Semantic Segmentation** framework for training and evaluating segmentation models using CAM-based pseudo-labels and partial or full supervision.
+#  Weakly-supervised Semantic Segmentation on Oxford-IIIT Pet with Class-Agnostic Reﬁnement
 
 ---
 
-## 📌 Overview
+## Overview
 
 This framework implements a modular pipeline for weakly-supervised semantic segmentation using the Oxford-IIIT Pet dataset. It supports:
 - Training classifiers with various initialization types and CAM methods.
 - Generating Class Activation Maps (CAMs)
 - Converting CAMs to pseudo segmentation masks
+- Optional Class-Agnostic Refinement process (CCAM)
 - Training segmentation models using weak or full supervision
 - Evaluation and result aggregation
 
@@ -17,41 +16,45 @@ All components are accessible via command-line interfaces in `main.py`.
 
 ---
 
-## ⚙️ Installation
+## Installation
 
-### Requirements
+### Additional pip package use declaration
 
-- Python 3.6+
-- PyTorch 1.7+
-- CUDA (recommended for faster training)
+Only one additional package is used beyond the `comp0197-cw1-pt` environment:
 
-### Additional pip packages used
-
-Only one additional package is used beyond the `comp0197-cw1-xx` environment:
-
-- `tqdm`: for progress visualisation
+- `tqdm`: for progress visualization
 
 ---
 
-### 🔧 Setup
+### Setup
 
-#### Clone the repository
+#### Create the Environment
 
-```bash
-git clone https://github.com/RichardHuang24/Applied-Deep-Learning-Group-Project.git
-cd Applied-Deep-Learning-Group-Project
-```
-
-#### Create a virtual environment (optional but recommended)
+Our code is compatible with CPU version of Pytorch, but GPU is **strongly recommend for efficiency**. Change `--index-url` option to `--index-url https://download.pytorch.org/whl/cu124` if you have GPUs.
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+conda create -n comp0197-cw1-pt python=3.12 pip && conda activate comp0197-cw1-pt && pip install torch==2.5.0 torchvision --index-url https://download.pytorch.org/whl/cpu
+
+pip install tqdm
 ```
 
----
+#### Prepare Classifier Checkpoints
 
-## 📁 Dataset
+We have prepared pretrained classifier checkpoints on Oxford-IIIT Pets:
+
+```
+outputs/imagenet_classifier.pth
+outputs/mocov2_classifier.pth
+outputs/random_classifier.pth
+```
+
+These files are available on Google Drive:
+
+https://drive.google.com/drive/folders/1t8Ic0gyOdMZzmWnXhYGwAx1RseX_HMi6?usp=sharing
+
+Especially when you want to try `mocov2` or `random` initialization, please **copy and rename** the corresponding classifier checkpoints and save it **exactly as** `outputs/classifier.pth` to avoid the long training process.
+
+#### Download Dataset
 
 This framework is configured to work with the **Oxford-IIIT Pet Dataset**.
 
@@ -63,7 +66,7 @@ python main.py download
 
 ---
 
-## 🚀 Running Experiments
+## Running Experiments
 
 **Note**: This framework uses `ResNet-50` as the default and only backbone for all classification models.
 
@@ -73,90 +76,70 @@ All commands below are available via `main.py`. You can run individual steps or 
 
 ---
 
-### 🔹 Step 1: Train a Classifier
-
-```bash
-python main.py train_classifier        --init imagenet     --cam gradcam     --experiment_name example_exp
-```
-
----
-
-### 🔹 Step 2: Generate CAM-based Pseudo Masks
-
-```bash
-python main.py generate_masks          --init imagenet     --cam cam+ccam       --experiment_name example_exp
-```
-
----
-
-### 🔹 Step 3: Train the Segmentation Model
-
-```bash
-python main.py train_segmentation     --supervision weak_gradcam     --init imagenet     --cam gradcam     --experiment_name example_exp
-```
-
----
-
-### 🔹 Step 4: Evaluate Segmentation Performance
-
-```bash
-python main.py evaluate     --supervision weak_gradcam     --init imagenet     --cam gradcam     --experiment_name example_exp
-```
-
----
-
-### 🔹 Combined Step: Train Classifier + Generate CAM Masks
-
-```bash
-python main.py train_and_generate      --init imagenet     --cam gradcam+ccam     --experiment_name example_exp
-```
-
----
-
-### 🔹 Run Full Pipeline
+### ⭐ Run Full Pipeline (Recommended)
 
 **🔸 Weakly-Supervised Example (GradCAM):**
+
 ```bash
 python main.py run_all \
     --init imagenet \
     --cam gradcam \
-    --supervision weak_gradcam \
-    --experiment_name example_exp
+    --supervision weak
 ```
 
 **🔸 Fully-Supervised Example (Ground Truth Masks):**
+
 ```bash
 python main.py run_all \
     --init imagenet \
-    --supervision full \
-    --experiment_name full_supervision_exp
+    --supervision full
 ```
 
+---
+
+### Step 1: Train a Classifier
+
+```bash
+python main.py train_classifier        --init imagenet     --cam gradcam
+```
 
 ---
 
-## ⚙️ Customization Options
+### Step 2: Generate CAM-based Pseudo Masks
 
-| Option         | Values                                             | Description                      |
-|----------------|-----------------------------------------------------|----------------------------------|
-| `--init`       | `random`, `mocov2`, `imagenet`                     | Initialization method            |
-| `--cam`        | `gradcam`, `cam`, `gradcam+ccam`, `cam+ccam`       | CAM methods                      |
-| `--supervision`| `full`, `weak_gradcam`, `weak_cam`                 | Supervision type                 |
+```bash
+python main.py generate_masks          --init imagenet     --cam cam       --model_path {model path to the trained classifier}
+```
 
 ---
 
-## 📦 Understanding the Output
+### Step 3: Train the Segmentation Model
 
-For each experiment, the following outputs are generated:
+```bash
+python main.py train_segmentation     --supervision weak     --init imagenet     --cam gradcam     --pseudo_masks_dir {path to pseudo mask}
+```
 
-1. **Classifier Model**: Trained image classifier
-2. **CAM Model**: Class Activation Map generator
-3. **Generated Masks**: Pseudo-masks from CAMs
-4. **Segmentation Model**: Final segmentation model (e.g., PSPNet)
-5. **Evaluation Results**: mIoU and pixel accuracy scores
-6. **Experiment Summary**: Visual and JSON summary
+---
 
-## 📦 Output Structure
+### Step 4: Evaluate Segmentation Performance
+
+```bash
+python main.py evaluate     --supervision weak_gradcam     --init imagenet     --checkpoint {path to trained segmentation model}
+```
+
+---
+
+## Customization Options
+
+Below are the customization options that can reproduce the results in our reports.
+
+| Option          | Values                                       | Description           |
+| --------------- | -------------------------------------------- | --------------------- |
+| `--init`        | `random`, `mocov2`, `imagenet`               | Initialization method |
+| `--cam`         | `gradcam`, `cam`, `gradcam+ccam`, `cam+ccam` | CAM methods           |
+| `--supervision` | `full`, `weak`                               | Supervision type      |
+
+## Output Structure
 
 ```
 outputs/
@@ -172,17 +155,7 @@ outputs/
 
 ---
 
-## 📊 Metrics
-
-The framework evaluates segmentation performance using:
-
-- **Pixel Accuracy**: Percentage of correctly classified pixels.
-- **Mean IoU (mIoU)**: Average Intersection over Union across all classes.
-
-
----
-
-## 📂 Project Structure
+## Project Structure
 
 ```
 ├── main.py
@@ -200,23 +173,17 @@ The framework evaluates segmentation performance using:
 ├── models/
 │   ├── classifier.py
 │   ├── cam.py
+│   ├── train_ccam.py
 │   └── pspnet.py
 
 ├── utils/
 │   ├── download.py
 │   ├── metrics.py
 │   ├── visualization.py
+│   ├── load_config.py
 │   └── logging.py
 
 ├── config.json
 ├── requirements.txt
 └── README.md
 ```
-
-
----
-
-## 📜 Citation
-
-> GitHub: [RichardHuang24/Applied-Deep-Learning-Group-Project](https://github.com/RichardHuang24/Applied-Deep-Learning-Group-Project)
-
