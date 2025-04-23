@@ -24,8 +24,12 @@ All components are accessible via command-line interfaces in `main.py`.
 - Python 3.6+
 - PyTorch 1.7+
 - CUDA (recommended for faster training)
-- **Additional dependencies**:  
-  - `tqdm`  
+
+### Additional pip packages used
+
+Only one additional package is used beyond the `comp0197-cw1-xx` environment:
+
+- `tqdm`: for progress visualisation
 
 ---
 
