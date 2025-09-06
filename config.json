@@ -1,116 +1,154 @@
 {
-    "dataset": {
-      "name": "oxford_pets",
-      "root": "./dataset",
-      "num_classes": 37,
-      "image_size": 224
+  "dataset": {
+    "name": "oxford_pets",
+    "root": "./dataset",
+    "num_classes": 37,
+    "image_size": 224
+  },
+  "training": {
+    "seed": 42,
+    "epochs": {
+      "pspnet": 25
     },
-    "training": {
-      "seed": 42,
-      "epochs": {
-        "classifier": 30,
-        "cam": 40,
-        "pspnet": 50
-      },
-      "batch_size": 32,
-      "num_workers": 4,
-      "lr": {
-        "classifier": 0.0001,
-        "cam": 0.0001,
-        "pspnet": 0.0001
-      },
-      "weight_decay": 0.0001,
-      "num_epochs": 50,
-      "learning_rate": 0.001
+    "batch_size": 32,
+    "num_workers": 4,
+    "lr": {
+      "classifier": 0.0005,
+      "cam": 0.0001,
+      "pspnet": 0.0005
     },
-    "models": {
-      "classifier": {
-        "backbones": ["resnet18", "resnet34", "resnet50"],
-        "initializations": ["simclr", "imagenet", "random"],
-        "default": {
-          "backbone": "resnet50",
-          "initialization": "imagenet"
-        }
-      },
-      "cam": {
-        "methods": ["gradcam", "ccam"],
-        "default_method": "ccam",
-        "threshold": 0.4
-      },
-      "pspnet": {
+    "weight_decay": 1e-4,
+    "num_epochs": 50,
+    "learning_rate": 5e-4
+  },
+  "models": {
+    "classifier": {
+      "backbones": ["resnet18", "resnet34", "resnet50"],
+      "initializations": ["simclr", "imagenet", "random"],
+      "default": {
         "backbone": "resnet50",
-        "supervision": ["full", "weak_gradcam", "weak_ccam"]
+        "initialization": "imagenet"
       }
     },
-    "paths": {
-      "dataset": "./dataset",
-      "outputs": "./outputs",
-      "masks": "./outputs/masks",
-      "results": "./outputs/results",
-      "checkpoints": "checkpoints"
+    "cam": {
+      "methods": ["gradcam", "ccam"],
+      "default_method": "ccam",
+      "threshold": 0.5
     },
-    "experiments": {
-      "classifier": [
-        {
-          "name": "resnet18_imagenet",
-          "backbone": "resnet18",
-          "initialization": "imagenet"
-        },
-        {
-          "name": "resnet18_random",
-          "backbone": "resnet18",
-          "initialization": "random"
-        },
-        {
-          "name": "resnet18_simclr",
-          "backbone": "resnet18",
-          "initialization": "simclr"
-        },
-        {
-          "name": "resnet34_imagenet",
-          "backbone": "resnet34",
-          "initialization": "imagenet"
-        },
-        {
-          "name": "resnet50_imagenet",
-          "backbone": "resnet50",
-          "initialization": "imagenet"
-        }
-      ],
-      "cam": [
-        {
-          "name": "gradcam_resnet18",
-          "method": "gradcam",
-          "backbone": "resnet18"
-        },
-        {
-          "name": "ccam_resnet18",
-          "method": "ccam",
-          "backbone": "resnet18"
-        }
-      ],
-      "segmentation": [
-        {
-          "name": "baseline",
-          "description": "Fully-supervised baseline with ground truth masks",
-          "supervision": "full"
-        },
-        {
-          "name": "weak_gradcam",
-          "description": "Weakly-supervised with GradCAM",
-          "supervision": "weak_gradcam"
-        },
-        {
-          "name": "weak_ccam",
-          "description": "Weakly-supervised with CCAM",
-          "supervision": "weak_ccam"
-        }
-      ],
-      "backbones": ["resnet18", "resnet34", "resnet50"],
-      "initializations": ["imagenet", "simclr", "random"],
-      "cam_methods": ["gradcam", "ccam"]
-    },
-    "model": {
-      "backbone": "resnet18"
+    "pspnet": {
+      "backbone": "resnet50",
+      "supervision": ["full", "weak_gradcam", "weak_ccam"]
     }
+  },
+  "paths": {
+    "dataset": "./dataset",
+    "outputs": "./outputs",
+    "masks": "./outputs/masks",
+    "results": "./outputs/results",
+    "checkpoints": "checkpoints"
+  },
+  "experiments": {
+    "classifier": [
+      {
+        "name": "resnet18_imagenet",
+        "backbone": "resnet18",
+        "initialization": "imagenet"
+      },
+      {
+        "name": "resnet18_random",
+        "backbone": "resnet18",
+        "initialization": "random"
+      },
+      {
+        "name": "resnet18_simclr",
+        "backbone": "resnet18",
+        "initialization": "simclr"
+      },
+      {
+        "name": "resnet34_imagenet",
+        "backbone": "resnet34",
+        "initialization": "imagenet"
+      },
+      {
+        "name": "resnet34_random",
+        "backbone": "resnet34",
+        "initialization": "random"
+      },
+      {
+        "name": "resnet34_simclr",
+        "backbone": "resnet34",
+        "initialization": "simclr"
+      },
+      {
+        "name": "resnet50_imagenet",
+        "backbone": "resnet50",
+        "initialization": "imagenet"
+      },
+      {
+        "name": "resnet50_random",
+        "backbone": "resnet50",
+        "initialization": "random"
+      },
+      {
+        "name": "resnet50_simclr",
+        "backbone": "resnet50",
+        "initialization": "simclr"
+      }
+    ],
+    "cam": [
+      {
+        "name": "gradcam_resnet18",
+        "method": "gradcam",
+        "backbone": "resnet18"
+      },
+      {
+        "name": "ccam_resnet18",
+        "method": "ccam",
+        "backbone": "resnet18"
+      },
+      {
+        "name": "gradcam_resnet34",
+        "method": "gradcam",
+        "backbone": "resnet34"
+      },
+      {
+        "name": "ccam_resnet34",
+        "method": "ccam",
+        "backbone": "resnet34"
+      },
+      {
+        "name": "gradcam_resnet50",
+        "method": "gradcam",
+        "backbone": "resnet50"
+      },
+      {
+        "name": "ccam_resnet50",
+        "method": "ccam",
+        "backbone": "resnet50"
+      }
+    ],
+    "segmentation": [
+      {
+        "name": "baseline",
+        "description": "Fully-supervised baseline with ground truth masks",
+        "supervision": "full"
+      },
+      {
+        "name": "weak_gradcam",
+        "description": "Weakly-supervised with GradCAM",
+        "supervision": "weak_gradcam"
+      },
+      {
+        "name": "weak_ccam",
+        "description": "Weakly-supervised with CCAM",
+        "supervision": "weak_ccam"
+      }
+    ],
+    "backbones": ["resnet18", "resnet34", "resnet50"],
+    "initializations": ["imagenet", "simclr", "random"],
+    "cam_methods": ["gradcam", "ccam"]
+  },
+  "model": {
+    "backbone": "resnet50"
   }
+}

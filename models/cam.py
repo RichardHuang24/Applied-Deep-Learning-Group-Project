@@ -1,261 +1,356 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Class Activation Map (CAM) implementations:
 - Grad-CAM
-- CCAM (Cross-Channel Class Activation Mapping)
+- CAM (Zhou et al. 2016)
 """
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import json
 import logging
 from PIL import Image
+from pathlib import Path
+
+from .classifier import ResNetCAM
 
 logger = logging.getLogger(__name__)
 
-class GradCAM:
+class GradCAMForMask:
     """
-    Grad-CAM implementation for visualizing class activation maps
-    
-    Reference: Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization
+    Grad-CAM wrapper for generating pseudo-masks for weakly-supervised segmentation.
     """
+
     def __init__(self, model, target_layer=None):
+        self.model = model
+        self.model.eval()
+
+        self.gradients = None
+        self.activations = None
+        self.hooks = []
+
+        # Automatically find the last conv layer if not specified
+        if target_layer is None:
+            if hasattr(model, 'model'):  # Custom wrapper case
+                target_layer = model.model.layer4[-2]
+            else:
+                target_layer = model.layer4[-2]
+
+        # Register hooks
+        self.hooks.append(target_layer.register_forward_hook(self._forward_hook))
+        self.hooks.append(target_layer.register_full_backward_hook(self._backward_hook))
+
+    def __del__(self):
+        for hook in self.hooks:
+            hook.remove()
+
+    def _forward_hook(self, module, input, output):
+        self.activations = output.detach()
+
+    def _backward_hook(self, module, grad_input, grad_output):
+        self.gradients = grad_output[0].detach()
+
+    def generate_mask(self, image_tensor, target_class=None, orig_size=None, threshold=0.4, relu=True):
         """
-        Initialize GradCAM
+        Generate a pseudo-mask from an input image tensor.
+
+        Args:
+            image_tensor (Tensor): Image tensor [1, C, H, W]
+            target_class (int or None): If None, use predicted class
+            orig_size (tuple): Resize CAM to this (H, W) if given
+            threshold (float): Value in [0, 1] to threshold the CAM
+            relu (bool): Apply ReLU before thresholding
+
+        Returns:
+            cam_np: Raw CAM (H, W) as float
+            binary_mask: Thresholded mask (H, W) as uint8
+        """
+        image_tensor = image_tensor.clone().requires_grad_(True)
+
+        # Forward pass
+        outputs = self.model(image_tensor)
+        if isinstance(outputs, dict):
+            outputs = outputs['logits']
+
+        if target_class is None:
+            target_class = torch.argmax(outputs, dim=1).item()
+        elif isinstance(target_class, torch.Tensor):
+            target_class = target_class.item()
+
+        # Backward for target class
+        self.model.zero_grad()
+        one_hot = torch.zeros_like(outputs)
+        one_hot[0, target_class] = 1
+        outputs.backward(gradient=one_hot, retain_graph=True)
+
+        # Grad-CAM weights
+        weights = torch.sum(self.gradients, dim=(2, 3), keepdim=True)
+        cam = torch.sum(weights * self.activations, dim=1)  # shape [1, H, W]
+
+        # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+        # print("\n\n")
+        if relu:
+            cam = F.relu(cam)
+        # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "quantiles", cam.quantile(0.1), cam.quantile(0.3), cam.quantile(0.5), cam.quantile(0.7), cam.quantile(0.9))
+        # print("\n\n")
+
+        # Normalize CAM
+        cam = cam.squeeze().cpu().numpy()
+        # cam -= cam.min()
+        # cam_max = cam.max()
+        # if cam_max > 0:
+            # cam /= cam_max
+        # cam = (cam - cam.mean()) / cam.std()
+        # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+        # print("\n\n")
+
+        # Resize if needed
+        if orig_size is not None:
+            cam_tensor = torch.tensor(cam, dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # shape: [1, 1, H, W]
+
+            # Resize using bilinear interpolation
+            resized_cam = F.interpolate(cam_tensor, size=orig_size, mode='bilinear', align_corners=False)
+
+            # Convert back to numpy [H, W]
+            cam = resized_cam.squeeze().cpu().numpy()
+
+        # Threshold to get binary mask
+        binary_mask = (cam >= threshold).astype(np.uint8)
+
+        return cam, binary_mask
+
+    def save_mask(self, mask, save_path):
+        """
+        Save binary mask to a .png file using pathlib.Path.
+
+        Args:
+            mask (np.ndarray): Binary mask (0 or 1)
+            save_path (Path): Pathlib Path to save the .png mask
+        """
+        save_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure parent dir exists
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_img.save(save_path)
+
+
+class CAMForMask:
+    """
+    Class Activation Map generator for ResNetCAM models.
+    
+    This class generates class activation maps for a model with
+    Global Average Pooling architecture (following the original CAM paper).
+    """
+    
+    def __init__(self, model):
+        """
+        Initialize CAM generator with a trained model.
         
         Args:
-            model: Trained classifier model
-            target_layer: Target layer for CAM generation (if None, use last conv layer)
+            model (ResNetCAM): A trained ResNetCAM model
+        """
+        if not isinstance(model, ResNetCAM):
+            raise ValueError("Model must be an instance of ResNetCAM")
+        
+        self.model = model
+        self.model.eval()
+    
+    def generate_mask(self, image_tensor, target_class=None, orig_size=None, threshold=0.4):
+        """
+        Generate a class activation map and binary mask from an input image.
+        
+        Args:
+            image_tensor (Tensor): Input image tensor [1, C, H, W]
+            target_class (int or None): Target class index. If None, use predicted class
+            orig_size (tuple): Resize CAM to this (H, W) if given
+            threshold (float): Value in [0, 1] to threshold the CAM
+            
+        Returns:
+            cam_np: Raw CAM (H, W) as float
+            binary_mask: Thresholded mask (H, W) as uint8
+        """
+        # Forward pass
+        with torch.no_grad():
+            # Get model prediction if target class not specified
+            if target_class is None:
+                outputs = self.model(image_tensor)
+                target_class = torch.argmax(outputs, dim=1).item()
+            elif isinstance(target_class, torch.Tensor):
+                target_class = target_class.item()
+            
+            # Get feature maps from the last convolutional layer
+            feature_maps = self.model.get_activations(image_tensor)  # [1, C, H, W]
+            
+            # Get class-specific weights
+            class_weights = self.model.get_cam_weights()[target_class]  # [C]
+            
+            # Compute weighted sum of feature maps
+            batch_size, num_channels, height, width = feature_maps.shape
+            cam = torch.zeros(height, width, device=feature_maps.device)
+            
+            for i, w in enumerate(class_weights):
+                cam += w * feature_maps[0, i]  # Add weighted activation maps
+            # Apply ReLU to focus on positive activations
+            cam = F.relu(cam)
+            
+            # Convert to numpy and normalize
+            cam_np = cam.cpu().numpy()
+            # cam_np -= cam_np.min()
+            # cam_max = cam_np.max()
+            # if cam_max > 0:
+            #     cam_np /= cam_max
+            # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+            # print("\n\n")
+            # Resize if needed
+            if orig_size is not None:
+                cam_tensor = torch.tensor(cam_np, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                resized_cam = F.interpolate(cam_tensor, size=orig_size, mode='bilinear', align_corners=False)
+                cam_np = resized_cam.squeeze().cpu().numpy()
+            
+            # Threshold to get binary mask
+            binary_mask = (cam_np >= threshold).astype(np.uint8)
+            
+            return cam_np, binary_mask
+    
+    def save_mask(self, mask, save_path):
+        """
+        Save binary mask to a .png file using pathlib.Path.
+        
+        Args:
+            mask (np.ndarray): Binary mask (0 or 1)
+            save_path (Path): Pathlib Path to save the .png mask
+        """
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_img.save(save_path)
+
+
+class CCAMForMask:
+    """
+    CCAM wrapper for generating pseudo-masks for weakly-supervised segmentation.
+    Follows the same interface as GradCAMForMask and CAMForMask to ensure compatibility.
+    """
+    def __init__(self, model):
+        """
+        Initialize CCAMForMask with a trained CCAM model
+        
+        Args:
+            model: Trained CCamModel instance
         """
         self.model = model
         self.model.eval()
-        
-        # Register hooks
-        self.hooks = []
-        self.gradients = None
-        self.activations = None
-        
-        # Get target layer (default: last conv layer)
-        if target_layer is None:
-            if hasattr(model, 'model'):  # For ResNetClassifier wrapper
-                target_layer = model.model.layer4[-1]
-            else:
-                target_layer = model.layer4[-1]
-        
-        # Register forward and backward hooks
-        def forward_hook(module, input, output):
-            self.activations = output.detach()
-            
-        def backward_hook(module, grad_input, grad_output):
-            self.gradients = grad_output[0].detach()
-        
-        self.hooks.append(target_layer.register_forward_hook(forward_hook))
-        self.hooks.append(target_layer.register_full_backward_hook(backward_hook))
-        
-    def __del__(self):
-        # Remove hooks when object is deleted
-        for hook in self.hooks:
-            hook.remove()
     
-    def generate_cam(self, input_image, target_class=None, relu=True):
+    def generate_mask(self, image_tensor, target_class=None, orig_size=None, threshold=0.4, relu=True):
         """
-        Generate class activation map
+        Generate a pseudo-mask from an input image tensor using CCAM.
+        Maintains the same interface as GradCAMForMask for compatibility.
         
         Args:
-            input_image: Input tensor image [B, C, H, W]
-            target_class: Target class index (if None, use predicted class)
-            relu: Whether to apply ReLU to CAM output
+            image_tensor (Tensor): Image tensor [1, C, H, W]
+            target_class (int or None): Not used in CCAM (class-agnostic)
+            orig_size (tuple): Resize CAM to this (H, W) if given
+            threshold (float): Value in [0, 1] to threshold the CAM
+            relu (bool): Not used in CCAM (always applies sigmoid)
             
         Returns:
-            numpy.ndarray: Class activation map
+            cam_np: Raw CAM (H, W) as float
+            binary_mask: Thresholded mask (H, W) as uint8
         """
-        # Forward pass
-        input_image = input_image.clone().requires_grad_(True)
-        
-        if hasattr(self.model, 'forward'):
-            model_output = self.model(input_image)
-        else:
-            # Handle case where model might be a wrapper with a different forward method
-            model_output = self.model.forward(input_image)
-        
-        if isinstance(model_output, dict):
-            # Handle the case where the model returns a dict
-            model_output = model_output['logits']
-        
-        # If target class is not specified, use the predicted class
-        batch_size = input_image.size(0)
-        if target_class is None:
-            target_class = torch.argmax(model_output, dim=1)
-        elif not isinstance(target_class, torch.Tensor):
-            target_class = torch.tensor([target_class] * batch_size, 
-                                       device=input_image.device)
-        
-        # Zero gradients
-        self.model.zero_grad()
-        
-        # Target for backprop
-        one_hot = torch.zeros_like(model_output)
-        for idx, cls in enumerate(target_class):
-            one_hot[idx, cls] = 1
-        
-        # Backward pass
-        model_output.backward(gradient=one_hot, retain_graph=True)
-        
-        # Calculate weights using global average pooling (GAP) on gradients
-        weights = torch.mean(self.gradients, dim=(2, 3), keepdim=True)
-        
-        # Generate CAM by weighting activation maps
-        cam = torch.sum(weights * self.activations, dim=1, keepdim=True)
-        
-        # Apply ReLU if requested
-        if relu:
-            cam = F.relu(cam)
-        
-        # Normalize each CAM
-        batch_cams = []
-        for i in range(batch_size):
-            cam_i = cam[i].squeeze().cpu().detach().numpy()
-            cam_i = cam_i - np.min(cam_i)
-            cam_max = np.max(cam_i)
-            if cam_max != 0:
-                cam_i = cam_i / cam_max
-            batch_cams.append(cam_i)
-        
-        return np.array(batch_cams)
-
-
-class CCAM(nn.Module):
-    """
-    Cross-Channel Class Activation Mapping (CCAM)
-    
-    A more effective CAM method that captures cross-channel interactions 
-    for better localization in weakly-supervised semantic segmentation.
-    """
-    def __init__(self, backbone='resnet18', num_classes=37):
-        """
-        Initialize CCAM
-        
-        Args:
-            backbone: Backbone model name
-            num_classes: Number of classes
-        """
-        super(CCAM, self).__init__()
-        
-        # Create backbone network
-        from .classifier import ResNetClassifier
-        self.backbone = ResNetClassifier(backbone=backbone, num_classes=num_classes)
-        
-        # Get feature dimensions
+        # Forward pass through CCAM model
         with torch.no_grad():
-            dummy = torch.zeros(1, 3, 224, 224)
-            features = self.backbone.get_features(dummy)
-            _, C, H, W = features.shape
-        
-        # Class-specific attention branch
-        # This generates attention maps for each class
-        self.attention_branch = nn.Sequential(
-            nn.Conv2d(C, C // 2, kernel_size=3, padding=1),
-            nn.BatchNorm2d(C // 2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(C // 2, num_classes, kernel_size=1)
-        )
-        
-        # Classification branch
-        # This generates classification scores
-        self.gap = nn.AdaptiveAvgPool2d(1)
-        self.classification_branch = nn.Linear(C, num_classes)
-        
-    def forward(self, x):
+            fg_feats, bg_feats, ccam = self.model(image_tensor)
+            
+            # Get CAM
+            cam = ccam.squeeze()
+            # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+            cam = F.relu(cam)
+            # print(f"min", cam.min(), "max", cam.max(), "mean", cam.mean(), "10% quantiles", cam.quantile(0.1), "30% quantiles", cam.quantile(0.3), "50% quantiles", cam.quantile(0.5), "70% quantiles", cam.quantile(0.7), "90% quantiles", cam.quantile(0.9))
+            # Normalize CAM (already normalized by sigmoid, but let's ensure ranges)
+            # cam = cam - cam.min()
+            # cam_max = cam.max()
+            # cam /= cam_max + (1e-6)
+            cam = cam.cpu().numpy()
+            # Resize if needed
+            if orig_size is not None:
+                cam_tensor = torch.tensor(cam, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                resized_cam = F.interpolate(cam_tensor, size=orig_size, mode='bilinear', align_corners=False)
+                cam = resized_cam.squeeze().cpu().numpy()
+            
+            # Threshold to get binary mask
+            binary_mask = (cam >= threshold).astype(np.uint8)
+            
+            return cam, binary_mask
+    
+    def save_mask(self, mask, save_path):
         """
-        Forward pass through CCAM
+        Save binary mask to a .png file using pathlib.Path
         
         Args:
-            x: Input tensor [B, 3, H, W]
-            
-        Returns:
-            dict: Dictionary with features, attention maps and classification scores
+            mask (np.ndarray): Binary mask (0 or 1)
+            save_path (Path): Pathlib Path to save the .png mask
         """
-        # Extract features from backbone
-        features = self.backbone.get_features(x)
-        
-        # Generate attention maps (one per class)
-        attention_maps = self.attention_branch(features)
-        
-        # Classification using global average pooling
-        gap_features = self.gap(features).view(features.size(0), -1)
-        classification_logits = self.classification_branch(gap_features)
-        
-        return {
-            'features': features,
-            'attention_maps': attention_maps,
-            'logits': classification_logits
-        }
-    
-    def get_cam(self, x, target_class=None):
-        """
-        Generate class activation map
-        
-        Args:
-            x: Input tensor [B, 3, H, W]
-            target_class: Target class index (if None, use predicted class)
-            
-        Returns:
-            numpy.ndarray: Class activation map
-        """
-        # Forward pass
-        output = self.forward(x)
-        attention_maps = output['attention_maps']
-        logits = output['logits']
-        
-        # If target class is not specified, use predicted class
-        batch_size = x.size(0)
-        if target_class is None:
-            target_class = torch.argmax(logits, dim=1)
-        elif not isinstance(target_class, torch.Tensor):
-            target_class = torch.tensor([target_class] * batch_size, 
-                                       device=x.device)
-        
-        # Extract CAM for target classes
-        batch_cams = []
-        for i in range(batch_size):
-            cls_idx = target_class[i].item()
-            cam = attention_maps[i, cls_idx].cpu().detach().numpy()
-            
-            # Normalize
-            cam = cam - np.min(cam)
-            cam_max = np.max(cam)
-            if cam_max != 0:
-                cam = cam / cam_max
-                
-            batch_cams.append(cam)
-        
-        return np.array(batch_cams)
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_img.save(save_path)
 
+# class CAMForMask:
+#     def __init__(self, model, target_layer=None):
+#         self.model = model.eval()
+#         # 1) find target layer
+#         if target_layer is None:
+#             backbone = model.model if hasattr(model, "model") else model
+#             target_layer = backbone.layer4[-1] 
 
-def create_cam_model(config_path='config.json', method='ccam', backbone='resnet18'):
-    """
-    Factory function to create CAM models
-    
-    Args:
-        config_path: Path to configuration file
-        method: CAM method ('gradcam' or 'ccam')
-        backbone: Backbone model name
-        
-    Returns:
-        CAM model (GradCAM or CCAM instance)
-    """
-    # Load configuration
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
-    num_classes = config['dataset']['num_classes']
-    
-    if method == 'gradcam':
-        # For GradCAM we need a classifier model first
-        from .classifier import ResNetClassifier
-        classifier = ResNetClassifier(backbone=backbone, num_classes=num_classes)
-        return GradCAM(classifier)
-    elif method == 'ccam':
-        return CCAM(backbone=backbone, num_classes=num_classes)
-    else:
-        raise ValueError(f"Unsupported CAM method: {method}")
+#         self.fmaps = None
+#         target_layer.register_forward_hook(self._save_fmap)
+
+#         # 2) get weights
+#         if   hasattr(model, "fc"):            
+#             self.fc_weights = model.fc.weight.data
+#         elif hasattr(model, "classifier"):
+#             self.fc_weights = model.classifier.weight.data
+#         elif hasattr(model, "model") and hasattr(model.model, "fc"):
+#             self.fc_weights = model.model.fc.weight.data
+#         else:
+#             raise RuntimeError("❌ Cannot locate final linear layer (fc) in model")
+
+#         self.fc_weights = self.fc_weights.cpu()
+
+#     def _save_fmap(self, m, x, y):
+#         # y: [B, C, H, W]
+#         self.fmaps = y.detach()
+
+#     @torch.no_grad()
+#     def generate_mask(self, img_tensor, target_class=None,
+#                       orig_size=None, threshold=0.4):
+#         """
+#         Args:
+#             img_tensor: [1,C,H,W] 
+#             target_class: None -> predicted class
+#         Returns:
+#             cam_np, bin_mask (H,W)
+#         """
+#         logits = self.model(img_tensor)
+#         if target_class is None:
+#             target_class = torch.argmax(logits, 1).item()
+#         # 3) calculate CAM = w*F
+#         weights = self.fc_weights[target_class].to(self.fmaps.device).view(-1)
+#         cam     = torch.einsum("c,chw->hw", weights, self.fmaps[0])
+
+#         cam = cam.clamp(min=0)                         # ReLU
+#         cam -= cam.min()
+#         if cam.max() > 0:
+#             cam /= cam.max()
+
+#         if orig_size is not None:
+#             cam = F.interpolate(cam[None, None, ...], size=orig_size,
+#                                 mode="bilinear", align_corners=False)[0,0]
+
+#         cam_np = cam.cpu().numpy()
+#         bin_mask = (cam_np >= threshold).astype(np.uint8)
+#         return cam_np, bin_mask
+
+#     def save_mask(self, mask, save_path: Path):
+#         save_path.parent.mkdir(parents=True, exist_ok=True)
+#         Image.fromarray(mask * 255).save(save_path)

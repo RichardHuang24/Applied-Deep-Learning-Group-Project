@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Training functions for all models (classifier, CAM, segmentation)
 """
@@ -12,64 +13,34 @@ import logging
 from pathlib import Path
 import time
 from datetime import datetime
-
+import data
 from models.classifier import create_classifier
-from models.cam import create_cam_model
 from models.pspnet import create_segmentation_model
-from data import create_dataloaders
 from utils.metrics import calculate_metrics
 
 logger = logging.getLogger(__name__)
 
-def setup_logging(log_path):
-    """Set up logging configuration"""
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_path),
-            logging.StreamHandler()
-        ],
-        force=True
-    )
-
-def setup_device(seed):
-    """Setup device and seeds"""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-    logger.info(f"Using device: {device}")
-    return device
-
-def train_classifier(config_path, experiment, output_dir=None):
+def train_classifier(config, experiment, output_dir=None):
     """
     Train a classifier with the specified configuration
     
     Args:
-        config_path: Path to configuration file
+        config: Path to configuration file
         experiment: Experiment name (e.g., 'resnet18_imagenet')
         output_dir: Output directory
         
     Returns:
         str: Path to saved checkpoint
     """
-    # Load configuration
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
     # Set up output directory
-    if output_dir is None:
-        output_dir = os.path.join(config.get('paths', {}).get('outputs', 'outputs'), 'classifiers', experiment)
     os.makedirs(output_dir, exist_ok=True)
     
     # Set up logging
-    setup_logging(os.path.join(output_dir, 'training.log'))
+    logger = logging.getLogger("Train Classifier")
     
-    # Set up device
-    device = setup_device(config.get('training', {}).get('seed', 42))
+    # Set up device, set seed
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
     
     # Extract training parameters from config
     training_config = config.get('training', {})
@@ -81,27 +52,20 @@ def train_classifier(config_path, experiment, output_dir=None):
     # Parse experiment name to get backbone and initialization
     parts = experiment.split('_')
     if len(parts) >= 2:
-        backbone_name = parts[0]
-        initialization = parts[1]
+        backbone_name = parts[0]    # resnet50
+        initialization = parts[1]   # random
     else:
         backbone_name = 'resnet18'  # Default backbone
         initialization = 'imagenet'  # Default initialization
-    
-    # Extract dataset information
-    dataset_config = config.get('dataset', {})
-    num_classes = dataset_config.get('num_classes', 37)  # Default to Pet dataset classes
-    
+
     try:
         # Create dataloaders
-        train_loader, val_loader = create_dataloaders(
-            config=config,
-            split='train', 
-            batch_size=batch_size
-        )
+        train_loader = data.data_loaders(split='train', batch_size=batch_size)
+        val_loader = data.data_loaders(split='val', batch_size=batch_size, shuffle=False)
         
         # Create model
         logger.info(f"Creating {backbone_name} model with {initialization} initialization")
-        model = create_classifier(config_path, experiment)
+        model = create_classifier(config, experiment)
         model = model.to(device)
         
         # Set up criterion and optimizer
@@ -114,6 +78,8 @@ def train_classifier(config_path, experiment, output_dir=None):
         
         # Training loop
         best_acc = 0.0
+        checkpoint_path = os.path.join(output_dir, 'best_model.pth')
+
         for epoch in range(num_epochs):
             model.train()
             running_loss = 0.0
@@ -123,31 +89,21 @@ def train_classifier(config_path, experiment, output_dir=None):
             logger.info(f"Epoch {epoch+1}/{num_epochs}")
             
             # Training step
-            for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training")):
+            for batch_idx, (imgs, labels, _) in enumerate(tqdm(train_loader, desc="Training Classifier")):
                 # Extract data
-                images = batch[0].to(device)
-                labels = batch[1].to(device)
+                images = imgs.to(device)
+                labels = labels.to(device)
                 
-                # Debugging info (first batch only)
-                if batch_idx == 0 and epoch == 0:
-                    logger.info(f"Batch shape: {images.shape}")
-                    logger.info(f"Labels shape: {labels.shape}")
-                    logger.info(f"Label values: {labels}")
-                
-                # Zero gradients
                 optimizer.zero_grad()
-                
-                # Forward pass
                 try:
                     outputs = model(images)
+
                     loss = criterion(outputs, labels)
-                    
-                    # Backward pass and optimize
                     loss.backward()
                     optimizer.step()
                     
                     # Statistics
-                    running_loss += loss.item() * images.size(0)
+                    running_loss += loss.detach().item() * images.size(0)
                     _, predicted = torch.max(outputs, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
@@ -194,200 +150,82 @@ def train_classifier(config_path, experiment, output_dir=None):
             # Save best model
             if val_epoch_acc > best_acc:
                 best_acc = val_epoch_acc
-                checkpoint_path = os.path.join(output_dir, 'best_model.pth')
                 torch.save(model.state_dict(), checkpoint_path)
                 logger.info(f"Saved best model with acc: {best_acc:.4f}")
         
-        # Save final model
-        final_checkpoint_path = os.path.join(output_dir, 'final_model.pth')
-        torch.save(model.state_dict(), final_checkpoint_path)
+        # # Save final model
+        # final_checkpoint_path = os.path.join(output_dir, 'final_model.pth')
+        # torch.save(model.state_dict(), final_checkpoint_path)
         logger.info(f"Training completed. Best accuracy: {best_acc:.4f}")
         
-        return final_checkpoint_path
+        return checkpoint_path
     
     except Exception as e:
         logger.error(f"Error in train_classifier: {str(e)}")
         raise
 
-def train_cam(config_path, method='ccam', backbone='resnet18', num_epochs=None, output_dir=None):
-    """Train a CAM model (Note: GradCAM doesn't require training)"""
-    # Early return for GradCAM
-    if method != 'ccam':
-        logger.info("GradCAM doesn't require training as it uses a trained classifier")
-        return None
 
-    # Load config and setup
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
-    num_epochs = num_epochs or config['training']['epochs']['cam']
-    # Fix path construction
-    output_dir = Path(output_dir) if output_dir else Path(config['paths']['outputs']) / "cam" / method
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Setup logging and device
-    setup_logging(str(output_dir / "training.log"))
-    device = setup_device(config['training']['seed'])
-    
-    try:
-        # Initialize model and training components
-        model = create_cam_model(config_path, method, backbone)
-        if model is None:
-            raise ValueError(f"Failed to create CAM model with method: {method}")
-        model = model.to(device)
-        
-        train_loader, val_loader = create_dataloaders(
-            config=config,
-            split='train',
-            batch_size=config['training']['batch_size']
-        )
-        
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(
-            model.parameters(), 
-            lr=config['training']['lr']['cam'],
-            weight_decay=config.get('training', {}).get('weight_decay', 0.0001)
-        )
-        scheduler = ReduceLROnPlateau(
-            optimizer, 
-            mode='max', 
-            factor=0.1, 
-            patience=5, 
-            verbose=True
-        )
-        
-        # Training loop
-        best_acc = 0.0
-        checkpoint_path = output_dir / f"{method}_{backbone}_best.pth"
-        
-        for epoch in range(num_epochs):
-            train_metrics = train_epoch(model, train_loader, criterion, optimizer, device)
-            val_metrics = validate_epoch(model, val_loader, criterion, device)
-            
-            scheduler.step(val_metrics['acc'])
-            
-            logger.info(f"Epoch {epoch+1}/{num_epochs} - "
-                      f"Train Loss: {train_metrics['loss']:.4f}, Train Acc: {train_metrics['acc']:.4f}, "
-                      f"Val Loss: {val_metrics['loss']:.4f}, Val Acc: {val_metrics['acc']:.4f}")
-            
-            if val_metrics['acc'] > best_acc:
-                best_acc = val_metrics['acc']
-                save_checkpoint(model, optimizer, epoch, val_metrics['acc'], 
-                              method, backbone, checkpoint_path)
-                
-        logger.info(f"Training completed. Best validation accuracy: {best_acc:.4f}")
-        return str(checkpoint_path)
-        
-    except Exception as e:
-        logger.error(f"Error in train_cam: {str(e)}")
-        raise
-
-def train_epoch(model, dataloader, criterion, optimizer, device):
-    """Run one training epoch"""
-    model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    for images, labels, _, _ in tqdm(dataloader, desc="Training"):
-        images, labels = images.to(device), labels.to(device)
-        
-        optimizer.zero_grad()
-        logits = model(images)
-        loss = criterion(logits, labels)
-        loss.backward()
-        optimizer.step()
-        
-        running_loss += loss.item() * images.size(0)
-        _, predicted = torch.max(logits, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
-    
-    return {
-        'loss': running_loss / total if total > 0 else float('inf'),
-        'acc': correct / total if total > 0 else 0
-    }
-
-def validate_epoch(model, dataloader, criterion, device):
-    """Run one validation epoch"""
-    model.eval()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    with torch.no_grad():
-        for images, labels, _, _ in tqdm(dataloader, desc="Validation"):
-            images, labels = images.to(device), labels.to(device)
-            
-            logits = model(images)
-            loss = criterion(logits, labels)
-            
-            running_loss += loss.item() * images.size(0)
-            _, predicted = torch.max(logits, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-    
-    return {
-        'loss': running_loss / total if total > 0 else float('inf'),
-        'acc': correct / total if total > 0 else 0
-    }
-
-def save_checkpoint(model, optimizer, epoch, acc, method, backbone, path):
-    """Save model checkpoint"""
-    torch.save({
-        'epoch': epoch + 1,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'val_acc': acc,
-        'method': method,
-        'backbone': backbone
-    }, path)
-    logger.info(f"Saved best model with val_acc: {acc:.4f}")
-
-def train_segmentation(config_path, supervision='full', pseudo_masks_dir=None, num_epochs=None, output_dir=None):
+def train_segmentation(config, supervision='full', experiment_name=None, pseudo_masks_dir=None, num_epochs=None, output_dir=None, init='imagenet'):
     """Train a segmentation model with specified supervision type"""
-    # Load config and setup paths
-    with open(config_path, 'r') as f:
-        config = json.load(f)
+
+    logger = logging.getLogger("Train Segmentation")
+    logger.info(f"Training segmentation model with supervision: {supervision}")
     
-    model_name = next((exp['name'] for exp in config['experiments']['segmentation'] 
-                      if exp['supervision'] == supervision), supervision)
-    
-    output_dir = Path(output_dir) if output_dir else Path(config['paths']['outputs']) / "segmentation" / model_name
+    output_dir = Path(output_dir) if output_dir else Path(config['paths']['outputs']) / "segmentation" / experiment_name
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Setup logging and device
-    setup_logging(str(output_dir / "training.log"))
-    device = setup_device(config['training']['seed'])
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if supervision == 'full':
+        return_trimaps = True
+        return_pseudomask = False
+    elif supervision.startswith('weak'):
+        return_trimaps = False
+        return_pseudomask = True
+    else:
+        raise ValueError(f"Invalid supervision type: {supervision}. Expected 'full' or 'weak'.")
+    logger.info(f"Return trimaps: {return_trimaps}, Return pseudomask: {return_pseudomask}")
     
     try:
         # Setup training components
         num_epochs = num_epochs or config['training']['epochs']['pspnet']
-        pseudo_masks_dir = get_masks_dir(supervision, pseudo_masks_dir, config)
         backbone = config['models']['pspnet']['backbone']
+        training_config = config.get('training', {})
+        batch_size = training_config.get('batch_size', 32)
+        learning_rate = training_config.get('learning_rate', 0.001)
+        weight_decay = training_config.get('weight_decay', 0.0001)
         
         # Initialize model and data
-        model = create_segmentation_model(config_path, backbone).to(device)
-        train_loader, val_loader = create_dataloaders(
-            config=config,
+        model = create_segmentation_model(backbone=backbone, init=init).to(device)
+
+        train_loader = data.data_loaders(
             split='train',
-            batch_size=config['training']['batch_size'],
-            supervision=supervision,
-            pseudo_masks_dir=pseudo_masks_dir
+            batch_size=batch_size,
+            return_pseudomask=return_pseudomask,
+            return_trimaps=return_trimaps,
+            mask_dir=pseudo_masks_dir
+        )
+
+        val_loader = data.data_loaders(
+            split='val',
+            batch_size=batch_size,
+            return_pseudomask=False,
+            return_trimaps=True,
+            shuffle=False
         )
         
         # Setup training tools
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(
             model.parameters(),
-            lr=config['training']['lr']['pspnet'],
-            weight_decay=config.get('training', {}).get('weight_decay', 0.0001)
+            lr=learning_rate,
+            weight_decay=weight_decay
         )
-        scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=5, verbose=True)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
         
         # Training loop
         best_miou = 0.0
-        checkpoint_path = output_dir / f"{model_name}_best.pth"
+        checkpoint_path = output_dir / "segmentation_best.pth"
         
         for epoch in range(num_epochs):
             train_metrics = train_segmentation_epoch(model, train_loader, criterion, optimizer, device, config)
@@ -398,8 +236,7 @@ def train_segmentation(config_path, supervision='full', pseudo_masks_dir=None, n
             
             if val_metrics['miou'] > best_miou:
                 best_miou = val_metrics['miou']
-                save_segmentation_checkpoint(model, optimizer, epoch, val_metrics, 
-                                          supervision, backbone, checkpoint_path)
+                torch.save(model.state_dict(), checkpoint_path)
         
         logger.info(f"Training completed. Best mIoU: {best_miou:.4f}")
         return str(checkpoint_path)
@@ -422,9 +259,10 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
     running_pixel_acc = 0.0
     running_miou = 0.0
     total_samples = 0
-    num_classes = config['dataset']['num_classes'] + 1  # Add 1 for background
+    num_classes = 2
     
-    for images, masks, _, _ in tqdm(dataloader, desc="Training"):
+    for images, masks, _ in tqdm(dataloader, desc="Training"):
+
         images, masks = images.to(device), masks.to(device)
         
         optimizer.zero_grad()
@@ -433,8 +271,14 @@ def train_segmentation_epoch(model, dataloader, criterion, optimizer, device, co
         # Handle auxiliary loss if present
         if isinstance(outputs, tuple):
             outputs, aux_outputs = outputs
+            if masks.dim() == 4 and masks.size(1) == 1:
+                masks = masks.squeeze(1)
+            masks = masks.long()
             loss = criterion(outputs, masks) + 0.4 * criterion(aux_outputs, masks)
         else:
+            if masks.dim() == 4 and masks.size(1) == 1:
+                masks = masks.squeeze(1)
+            masks = masks.long()
             loss = criterion(outputs, masks)
         
         loss.backward()
@@ -467,10 +311,10 @@ def validate_segmentation_epoch(model, dataloader, criterion, device, config):
     running_pixel_acc = 0.0
     running_miou = 0.0
     total_samples = 0
-    num_classes = config['dataset']['num_classes'] + 1  # Add 1 for background
+    num_classes = 2 # Always 2 classes (Foreground/Background) for segmentation validation
     
     with torch.no_grad():
-        for images, masks, _, _ in tqdm(dataloader, desc="Validation"):
+        for images, masks, _ in tqdm(dataloader, desc="Validation"):
             images, masks = images.to(device), masks.to(device)
             
             outputs = model(images)
@@ -479,7 +323,12 @@ def validate_segmentation_epoch(model, dataloader, criterion, device, config):
             if isinstance(outputs, tuple):
                 outputs = outputs[0]
             
+            if masks.dim() == 4 and masks.size(1) == 1:
+                masks = masks.squeeze(1)
+
+            masks = masks.long()
             loss = criterion(outputs, masks)
+
             
             # Calculate metrics
             batch_size = images.size(0)
@@ -512,16 +361,3 @@ def log_metrics(epoch, num_epochs, train_metrics, val_metrics):
         f"Val Acc: {val_metrics['pixel_acc']:.4f}, "
         f"Val mIoU: {val_metrics['miou']:.4f}"
     )
-
-def save_segmentation_checkpoint(model, optimizer, epoch, val_metrics, supervision, backbone, checkpoint_path):
-    """Save segmentation model checkpoint"""
-    torch.save({
-        'epoch': epoch + 1,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'val_miou': val_metrics['miou'],
-        'val_pixel_acc': val_metrics['pixel_acc'],
-        'supervision': supervision,
-        'backbone': backbone
-    }, checkpoint_path)
-    logger.info(f"Saved best model with val_miou: {val_metrics['miou']:.4f}")

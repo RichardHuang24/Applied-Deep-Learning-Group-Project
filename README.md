@@ -1,220 +1,189 @@
-# 🐾 WSSS Framework
-
-A **Weakly-Supervised Semantic Segmentation** framework for training and evaluating segmentation models using CAM-based pseudo-labels and partial supervision.
-
-## 📌 Overview
-
-This framework implements a full pipeline for Weakly-Supervised Semantic Segmentation:
-
-1. Training an image classifier with various backbones and initialization methods.
-2. Generating Class Activation Maps (CAMs) using different techniques (e.g., Grad-CAM, CCAM).
-3. Creating pseudo-masks from the activation maps.
-4. Training a segmentation model using the pseudo-masks.
-5. Evaluating the segmentation performance with standard metrics.
+#  Weakly-supervised Semantic Segmentation on Oxford-IIIT Pet with Class-Agnostic Reﬁnement
 
 ---
 
-## ⚙️ Installation
+## Overview
 
-### Requirements
+This framework implements a modular pipeline for weakly-supervised semantic segmentation using the Oxford-IIIT Pet dataset. It supports:
+- Training classifiers with various initialization types and CAM methods.
+- Generating Class Activation Maps (CAMs)
+- Converting CAMs to pseudo segmentation masks
+- Optional Class-Agnostic Refinement process (CCAM)
+- Training segmentation models using weak or full supervision
+- Evaluation and result aggregation
 
-- Python 3.6+
-- PyTorch 1.7+
-- CUDA (recommended for faster training)
-- **Additional dependencies**: 
-  - `torch`  
-  - `Pillow`  
-  - `tqdm`
-  - `numpy`
-
----
-
-### 🔧 Setup
-
-#### Clone the repository
-
-```bash
-git clone https://github.com/RichardHuang24/Applied-Deep-Learning-Group-Project.git
-cd Applied-Deep-Learning-Group-Project
-```
-
-#### Create a virtual environment (optional but recommended)
-
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-#### Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
+All components are accessible via command-line interfaces in `main.py`.
 
 ---
 
-## 📁 Dataset
+## Installation
 
-This framework is configured to work with **Oxford-IIIT Pet Dataset**.
+### Additional pip package use declaration
 
-Download the dataset with:
+Only one additional package is used beyond the `comp0197-cw1-pt` environment:
 
-```bash
-python main.py --download-only
-```
-
-This will download the dataset to the location specified in your config file.
+- `tqdm`: for progress visualization
 
 ---
 
-## 🚀 Running Experiments
+### Setup
 
-### Basic Usage
+#### Create the Environment
 
-To run a single experiment with default settings:
+Our code is compatible with CPU version of Pytorch, but GPU is **strongly recommend for efficiency**. Change `--index-url` option to `--index-url https://download.pytorch.org/whl/cu124` if you have GPUs.
 
 ```bash
-python main.py
+conda create -n comp0197-cw1-pt python=3.12 pip && conda activate comp0197-cw1-pt && pip install torch==2.5.0 torchvision --index-url https://download.pytorch.org/whl/cpu
+
+pip install tqdm
+```
+
+#### Prepare Classifier Checkpoints
+
+We have prepared pretrained classifier checkpoints on Oxford-IIIT Pets:
+
+```
+outputs/imagenet_classifier.pth
+outputs/mocov2_classifier.pth
+outputs/random_classifier.pth
+```
+
+These files are available on Google Drive:
+
+https://drive.google.com/drive/folders/1t8Ic0gyOdMZzmWnXhYGwAx1RseX_HMi6?usp=sharing
+
+Especially when you want to try `mocov2` or `random` initialization, please **copy and rename** the corresponding classifier checkpoints and save it **exactly as** `outputs/classifier.pth` to avoid the long training process.
+
+#### Download Dataset
+
+This framework is configured to work with the **Oxford-IIIT Pet Dataset**.
+
+To download the dataset, run:
+
+```bash
+python main.py download
 ```
 
 ---
 
-### Customizing Experiments
+## Running Experiments
 
-Customize experiments with the following options:
+**Note**: This framework uses `ResNet-50` as the default and only backbone for all classification models.
 
-```bash
-python main.py --backbone resnet50 --init imagenet --cam gradcam
-```
+**Full Supervision**: For full supervision mode (`--supervision full`), the segmentation model is trained using ground-truth pixel masks without relying on CAM-generated pseudo-labels.
 
-#### ✅ Available Options
-
-- `--config`: Path to configuration file (default: `"config.json"`)
-- `--backbone`: Backbone architecture (choices: `"resnet18"`, `"resnet34"`, `"resnet50"`)
-- `--init`: Initialization method (choices: `"simclr"`, `"imagenet"`, `"random"`)
-- `--cam`: CAM method (choices: `"gradcam"`, `"ccam"`; default is `"gradcam"`)
-- `--all`: Run **all** combinations of experiments
-- `--download`: Download dataset before running experiments
-- `--download-only`: Only download dataset
-- `--output`: Custom output directory
+All commands below are available via `main.py`. You can run individual steps or the entire pipeline.
 
 ---
 
-### 🧪 Common Use Cases
+### ⭐ Run Full Pipeline (Recommended)
 
-#### Run a Fast Test Experiment
+**🔸 Weakly-Supervised Example (GradCAM):**
 
 ```bash
-python main.py --backbone resnet18 --init random --cam gradcam
+python main.py run_all \
+    --init imagenet \
+    --cam gradcam \
+    --supervision weak
 ```
 
-#### Run a High-Performance Configuration
+**🔸 Fully-Supervised Example (Ground Truth Masks):**
 
 ```bash
-python main.py --backbone resnet50 --init imagenet --cam ccam
-```
-
-#### Run All Possible Combinations
-
-```bash
-python main.py --all
-```
-
-#### Download Dataset and Run
-
-```bash
-python main.py --download --backbone resnet50 --init imagenet --cam gradcam
+python main.py run_all \
+    --init imagenet \
+    --supervision full
 ```
 
 ---
 
-## 📦 Understanding the Output
-
-For each experiment, the following outputs are generated:
-
-1. **Classifier Model**: Trained image classifier
-2. **CAM Model**: Class Activation Map generator
-3. **Generated Masks**: Pseudo-masks from CAMs
-4. **Segmentation Model**: Final segmentation model (e.g., PSPNet)
-5. **Evaluation Results**: mIoU and pixel accuracy scores
-6. **Experiment Summary**: Visual and JSON summary
-
-#### Output Directory Structure:
-
-```
-experiments/
-└── resnet50_imagenet_gradcam_20230415_120000/
-    ├── classifier/
-    ├── cam_model/
-    ├── masks/
-    │   └── visualizations/
-    ├── segmentation/
-    ├── evaluation/
-    ├── experiment_config.json
-    ├── results.json
-    ├── experiment_summary.png
-    └── experiment.log
-```
-
----
-
-## 📊 Metrics
-
-The framework evaluates segmentation performance using:
-
-- **Pixel Accuracy**: Percentage of correctly classified pixels.
-- **Mean IoU (mIoU)**: Average Intersection over Union across all classes.
-
-All results are automatically saved to `results/metrics_table.csv`.
-
----
-
-## 🧪 Experiment Workflow Example
+### Step 1: Train a Classifier
 
 ```bash
-# 1. Download the dataset
-python main.py --download-only
-
-# 2. Run a test experiment
-python main.py --backbone resnet18 --init random --cam gradcam
-
-# 3. Run a high-performance configuration
-python main.py --backbone resnet50 --init imagenet --cam ccam
-
-# 4. Compare all methods
-python main.py --all
+python main.py train_classifier        --init imagenet     --cam gradcam
 ```
 
 ---
 
-## 📂 Project Structure
+### Step 2: Generate CAM-based Pseudo Masks
+
+```bash
+python main.py generate_masks          --init imagenet     --cam cam       --model_path {model path to the trained classifier}
+```
+
+---
+
+### Step 3: Train the Segmentation Model
+
+```bash
+python main.py train_segmentation     --supervision weak     --init imagenet     --cam gradcam     --pseudo_masks_dir {path to pseudo mask}
+```
+
+---
+
+### Step 4: Evaluate Segmentation Performance
+
+```bash
+python main.py evaluate     --supervision weak_gradcam     --init imagenet     --checkpoint {path to trained segmentation model}
+```
+
+---
+
+## Customization Options
+
+Below are the customization options that can reproduce the results in our reports.
+
+| Option          | Values                                       | Description           |
+| --------------- | -------------------------------------------- | --------------------- |
+| `--init`        | `random`, `mocov2`, `imagenet`               | Initialization method |
+| `--cam`         | `gradcam`, `cam`, `gradcam+ccam`, `cam+ccam` | CAM methods           |
+| `--supervision` | `full`, `weak`                               | Supervision type      |
+
+## Output Structure
 
 ```
-├── main.py                  # Main runner
-├── train.py                 # Training pipeline
-├── generate_masks.py        # CAM mask generation
-├── evaluate.py              # Evaluation utilities
-├── utils/                   # Utility functions
-│   └── download.py          # Dataset utils
-│   └── metrics.py           # Evaluation metrics
-│   └── visualization.py     # PIL-based visualization
+outputs/
+└── experiments/
+    └── example_exp/
+        ├── masks/
+        │   ├── cams/              # CAM heatmaps for each image
+        │   └── masks/             # Pseudo segmentation masks generated from CAMs
+        ├── best_model.pth         # Trained classifier 
+        ├── segmentation_best.pth  # Best segmentation model weights
+        └── experiment.log         # Full log of training and evaluation 
+```
+
+---
+
+## Project Structure
+
+```
+├── main.py
+├── train.py
+├── generate_masks.py
+├── evaluate.py
+├── data.py
+
+├── handlers/
+│   ├── classifier.py
+│   ├── segmentation.py
+│   ├── masks.py
+│   └── evaluate.py
+
 ├── models/
-│   ├── classifier.py        # ResNet-based classifiers
-│   ├── cam.py               # CAM methods: GradCAM, CCAM
-│   └── pspnet.py/           # PSPNet (semantic segmentation)
-├── data/                    # Dataset handling
-├── config.json              # Default experiment configuration
-└── requirements.txt         # Dependencies
+│   ├── classifier.py
+│   ├── cam.py
+│   ├── train_ccam.py
+│   └── pspnet.py
+
+├── utils/
+│   ├── download.py
+│   ├── metrics.py
+│   ├── visualization.py
+│   ├── load_config.py
+│   └── logging.py
+
+├── config.json
+├── requirements.txt
+└── README.md
 ```
-
----
-
-## 📜 Citing
-
-If you use this framework in your research or coursework, please cite this repository:
-
-> GitHub: [RichardHuang24/Applied-Deep-Learning-Group-Project](https://github.com/RichardHuang24/Applied-Deep-Learning-Group-Project)
-
----
-
-Happy segmenting! 🎯

@@ -1,3 +1,4 @@
+# GenAI is used for rephrasing comments and debugging.
 """
 Evaluation metrics for semantic segmentation implemented in PyTorch
 """
@@ -116,7 +117,7 @@ def calculate_metrics(pred, target, num_classes):
         pred = torch.argmax(pred, dim=1)  # (B, H, W)
     
     if target.dim() == 4:  # (B, C, H, W)
-        target = torch.argmax(target, dim=1)  # (B, H, W)
+        target = torch.squeeze(target)  # (B, H, W)
     
     # Calculate pixel accuracy
     pixel_acc = calculate_pixel_accuracy(pred, target)

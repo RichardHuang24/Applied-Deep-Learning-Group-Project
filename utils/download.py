@@ -1,180 +1,168 @@
+# GenAI is used for rephrasing comments and debugging.
 """
-Dataset download utilities for Oxford-IIIT Pet Dataset
+oxford_pet_setup.py
+───────────────────
+Download, extract and prepare the Oxford‑IIIT Pet data set.
+
+Key upgrade: the `create_train_val_split` routine now performs a
+**stratified split**, so each of the 37 breeds keeps ≈ 80 % of its
+images for training and 20 % for validation.
 """
-import os
-import tarfile
-import urllib.request
-import logging
+from __future__ import annotations
+import os, tarfile, urllib.request, random, logging
 from pathlib import Path
+from collections import Counter
+from typing import List, Tuple
 from tqdm import tqdm
-import random
+from utils.logging import setup_logging                    
 
 logger = logging.getLogger(__name__)
 
-def download_file(url, output_path, desc=None):
-    """Download a file with progress bar"""
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
-    if os.path.exists(output_path):
-        logger.info(f"File already exists: {output_path}")
-        return output_path
-    
-    logger.info(f"Downloading {url} to {output_path}")
-    
-    # Get file size for progress reporting
-    try:
-        response = urllib.request.urlopen(url)
-        file_size = int(response.headers.get('Content-Length', 0))
-    except:
-        file_size = 0
-    
-    # Download with progress bar
-    with tqdm(total=file_size, unit='B', unit_scale=True, desc=desc or "Downloading") as pbar:
-        def report_progress(block_num, block_size, total_size):
-            pbar.update(block_size)
-        
-        urllib.request.urlretrieve(url, output_path, reporthook=report_progress)
-    
-    return output_path
 
-def extract_tarfile(tar_path, output_dir, desc=None):
-    """Extract a tar file with progress bar"""
-    os.makedirs(output_dir, exist_ok=True)
-    
+def download_file(url: str, dst: Path, desc: str | None = None) -> Path:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        logger.info(f"File already exists: {dst}")
+        return dst
+
+    logger.info(f"Downloading {url}")
+    try:
+        size = int(urllib.request.urlopen(url).headers.get('Content-Length', 0))
+    except Exception:
+        size = 0
+
+    with tqdm(total=size, unit='B', unit_scale=True, desc=desc or dst.name) as pbar:
+        def hook(block_num, block_size, total_size):
+            pbar.update(block_size)
+        urllib.request.urlretrieve(url, dst, reporthook=hook)
+
+    return dst
+
+
+def extract_tar(tar_path: Path, dst_dir: Path, desc: str | None = None):
+    dst_dir.mkdir(parents=True, exist_ok=True)
     with tarfile.open(tar_path) as tar:
         members = tar.getmembers()
-        with tqdm(total=len(members), desc=desc or "Extracting") as pbar:
-            for member in members:
-                tar.extract(member, path=output_dir)
+        with tqdm(total=len(members), desc=desc or f"Extract {tar_path.name}") as pbar:
+            for m in members:
+                tar.extract(m, path=dst_dir)
                 pbar.update(1)
 
-def create_train_val_split(dataset_dir, train_ratio=0.8):
-    """Create train/val/test splits and save to annotation files"""
-    logger.info("Creating dataset splits...")
-    annotations_dir = os.path.join(dataset_dir, "annotations")
-    os.makedirs(annotations_dir, exist_ok=True)
-    
-    # Look for images and their classes
-    images_dir = os.path.join(dataset_dir, "images")
-    classes = {}
-    for filename in os.listdir(images_dir):
-        if filename.endswith(".jpg"):
-            # Oxford Pet dataset naming: <class>_<id>.jpg
-            class_name = "_".join(filename.split("_")[:-1])
-            if class_name not in classes:
-                classes[class_name] = []
-            classes[class_name].append(filename)
-    
-    # Create class ID mapping
-    class_to_id = {name: i for i, name in enumerate(sorted(classes.keys()))}
-    
-    # Save class mapping
-    with open(os.path.join(annotations_dir, "classes.txt"), 'w') as f:
-        for name, idx in class_to_id.items():
-            f.write(f"{name} {idx}\n")
-    
-    # Create balanced train/val/test splits
-    train_samples = []
-    val_samples = []
-    
-    for class_name, files in classes.items():
-        random.shuffle(files)
-        
-        # Split images
-        split_idx = int(len(files) * train_ratio)
-        train_samples.extend([(f, class_to_id[class_name]) for f in files[:split_idx]])
-        val_samples.extend([(f, class_to_id[class_name]) for f in files[split_idx:]])
-    
-    # Shuffle again
-    random.shuffle(train_samples)
-    random.shuffle(val_samples)
-    
-    # Save splits to files
-    with open(os.path.join(annotations_dir, "train.txt"), 'w') as f:
-        for filename, class_id in train_samples:
-            f.write(f"{filename} {class_id}\n")
-    
-    with open(os.path.join(annotations_dir, "val.txt"), 'w') as f:
-        for filename, class_id in val_samples:
-            f.write(f"{filename} {class_id}\n")
-    
-    logger.info(f"Created splits: {len(train_samples)} training, {len(val_samples)} validation samples")
+
+# ───────────────── stratified split ───────────────── #
+
+def create_train_val_split(dataset_dir: Path,
+                           train_ratio: float = 0.8,
+                           seed: int = 42,
+                           n_classes: int = 37) -> None:
+    """
+    Build annotations/train.txt and annotations/val.txt with a
+    **class‑balanced** split.
+    """
+    rng = random.Random(seed)
+    ann_dir = dataset_dir / "annotations"
+    src_list = ann_dir / "trainval.txt"
+
+    if not src_list.exists():
+        raise FileNotFoundError(src_list)
+
+    # read, skip 6‑line header if present
+    with open(src_list) as f:
+        lines = f.readlines()
+        if lines[0].startswith('#'):
+            lines = lines[6:]
+
+    buckets: List[List[Tuple[str, int]]] = [[] for _ in range(n_classes)]
+    for ln in lines:
+        fname, cls_id, *_ = ln.strip().split()
+        cls_id = int(cls_id) - 1                       # 1‑based → 0‑based
+        buckets[cls_id].append((fname, cls_id))
+
+    train, val = [], []
+    for cls_samples in buckets:
+        rng.shuffle(cls_samples)
+        k = int(len(cls_samples) * train_ratio)
+        train.extend(cls_samples[:k])
+        val.extend(cls_samples[k:])
+
+    rng.shuffle(train); rng.shuffle(val)
+
+    def write_file(split: List[Tuple[str, int]], path: Path):
+        with open(path, 'w') as f:
+            for fname, cid in split:
+                f.write(f"{fname}.jpg {cid}\n")
+
+    write_file(train, ann_dir / "train.txt")
+    write_file(val,   ann_dir / "val.txt")
+    logger.info(f"Balanced split: {len(train)} train / {len(val)} val")
+
+
+def check_balance(ann_dir: Path, n_classes: int = 37):
+    def counts(txt):
+        c = Counter()
+        with open(txt) as f:
+            for ln in f:
+                _, cid = ln.strip().split()
+                c[int(cid)] += 1
+        return c
+
+    tr, vl = counts(ann_dir / "train.txt"), counts(ann_dir / "val.txt")
+    logger.info("Class  train  val")
+    for k in range(n_classes):
+        logger.info(f"{k:5d}  {tr[k]:5d}  {vl[k]:4d}")
+
+
+def verify_dataset(dataset_dir: Path) -> bool:
+    req = [dataset_dir / "images",
+           dataset_dir / "annotations" / "train.txt",
+           dataset_dir / "annotations" / "val.txt"]
+    for p in req:
+        if not p.exists():
+            logger.error(f"Missing {p}")
+            return False
+
+    n_img  = len(list((dataset_dir / "images").glob("*.jpg")))
+    n_mask = len(list((dataset_dir / "annotations" / "trimaps").glob("*.png")))
+    logger.info(f"Dataset OK: {n_img} images, {n_mask} trimaps")
     return True
 
-def download_dataset(dataset_dir, force_download=False):
-    """Download and prepare the Oxford-IIIT Pet Dataset"""
+
+def download_dataset(dataset_dir: str | Path,
+                     force: bool = False,
+                     seed: int = 42):
+
     dataset_dir = Path(dataset_dir)
-    os.makedirs(dataset_dir, exist_ok=True)
-    
-    logger.info(f"Preparing Oxford-IIIT Pet Dataset in {dataset_dir}")
-    
-    # Dataset URLs
-    images_url = "https://www.robots.ox.ac.uk/~vgg/data/pets/data/images.tar.gz"
-    annotations_url = "https://www.robots.ox.ac.uk/~vgg/data/pets/data/annotations.tar.gz"
-    
-    # Download images
-    images_tar = dataset_dir / "images.tar.gz"
-    if force_download or not images_tar.exists():
-        download_file(images_url, images_tar, desc="Downloading images")
-    
-    # Download annotations
-    annotations_tar = dataset_dir / "annotations.tar.gz"
-    if force_download or not annotations_tar.exists():
-        download_file(annotations_url, annotations_tar, desc="Downloading annotations")
-    
-    # Extract files
-    if force_download or not (dataset_dir / "images").exists():
-        logger.info("Extracting images...")
-        extract_tarfile(images_tar, dataset_dir, desc="Extracting images")
-    
-    if force_download or not (dataset_dir / "annotations").exists():
-        logger.info("Extracting annotations...")
-        extract_tarfile(annotations_tar, dataset_dir, desc="Extracting annotations")
-    
-    # Create train/val splits if they don't exist
+    dataset_dir.mkdir(exist_ok=True)
+
+    setup_logging(Path('output/downloads'), log_name="download.log")
+    logger.info(f"Preparing Oxford‑IIIT Pet at {dataset_dir}")
+
+    urls = {
+        "images":       "https://www.robots.ox.ac.uk/~vgg/data/pets/data/images.tar.gz",
+        "annotations":  "https://www.robots.ox.ac.uk/~vgg/data/pets/data/annotations.tar.gz"
+    }
+
+    # download & extract
+    img_tar  = dataset_dir / "images.tar.gz"
+    ann_tar  = dataset_dir / "annotations.tar.gz"
+    if force or not img_tar.exists():
+        download_file(urls["images"], img_tar, "images.tar.gz")
+    if force or not ann_tar.exists():
+        download_file(urls["annotations"], ann_tar, "annotations.tar.gz")
+
+    if force or not (dataset_dir / "images").exists():
+        extract_tar(img_tar, dataset_dir, "images")
+    if force or not (dataset_dir / "annotations").exists():
+        extract_tar(ann_tar, dataset_dir, "annotations")
+
+    # balanced split
     if not (dataset_dir / "annotations" / "train.txt").exists():
-        create_train_val_split(dataset_dir)
-    
-    # Verify dataset
+        create_train_val_split(dataset_dir, train_ratio=0.8, seed=seed)
+
+    check_balance(dataset_dir / "annotations")          # optional log
+
     if verify_dataset(dataset_dir):
-        logger.info("Dataset verified successfully")
-        return True
+        logger.info("Dataset ready")
     else:
         logger.error("Dataset verification failed")
-        return False
 
-def verify_dataset(dataset_dir):
-    """Verify that the dataset is properly downloaded and extracted"""
-    dataset_dir = Path(dataset_dir)
-    
-    # Check for expected directories
-    if not (dataset_dir / "images").exists():
-        logger.error("Images directory not found")
-        return False
-    
-    if not (dataset_dir / "annotations").exists():
-        logger.error("Annotations directory not found")
-        return False
-    
-    # Check for train/val splits
-    if not (dataset_dir / "annotations" / "train.txt").exists():
-        logger.error("Train split file not found")
-        return False
-    
-    if not (dataset_dir / "annotations" / "val.txt").exists():
-        logger.error("Validation split file not found")
-        return False
-    
-    # Count images
-    image_dir = dataset_dir / "images"
-    num_images = len(list(image_dir.glob("*.jpg")))
-    if num_images == 0:
-        logger.error("No images found")
-        return False
-    
-    # Count annotations
-    trimap_dir = dataset_dir / "annotations" / "trimaps"
-    num_trimaps = len(list(trimap_dir.glob("*.png"))) if trimap_dir.exists() else 0
-    
-    logger.info(f"Dataset verification complete: {num_images} images, {num_trimaps} trimaps")
-    return True
